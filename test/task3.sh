@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# 测试任务3：验证list_wikis工具输出是否包含Wikipedia
+# 测试任务3：验证list_wikipedia_wikis工具输出是否包含Wikipedia
 
-echo "Testing task 3: Verify list_wikis includes Wikipedia instances"
+echo "Testing task 3: Verify list_wikipedia_wikis includes Wikipedia instances"
 
-# 启动MCP服务器并测试list_wikis工具
-echo "Starting MCP server and testing list_wikis tool..."
+# 启动MCP服务器并测试list_wikipedia_wikis工具
+echo "Starting MCP server and testing list_wikipedia_wikis tool..."
 
 # 创建临时测试脚本
 cat > /tmp/task3_test.js << 'EOF'
@@ -36,17 +36,17 @@ setTimeout(() => {
   const hasZhwiki = allOutput.includes('zhwiki');
   
   if (hasEnwiki && hasZhwiki) {
-    console.log('✅ Task 3 PASSED: list_wikis correctly shows Wikipedia instances');
+    console.log('✅ Task 3 PASSED: list_wikipedia_wikis correctly shows Wikipedia instances');
     process.exit(0);
   } else {
-    console.log('❌ Task 3 FAILED: list_wikis does not show Wikipedia instances correctly');
+    console.log('❌ Task 3 FAILED: list_wikipedia_wikis does not show Wikipedia instances correctly');
     process.exit(1);
   }
 }, 5000);
 
-// 发送list_wikis请求
+// 发送list_wikipedia_wikis请求
 setTimeout(() => {
-  const request = '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_wikis","arguments":{}}}\n';
+  const request = '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_wikipedia_wikis","arguments":{}}}\n';
   server.stdin.write(request);
 }, 1000);
 EOF
@@ -58,9 +58,9 @@ rm /tmp/task3_test.js
 
 # 检查结果
 if [ $TEST_RESULT -eq 0 ]; then
-    echo "✅ Task 3 PASSED: list_wikis correctly shows Wikipedia instances"
+    echo "✅ Task 3 PASSED: list_wikipedia_wikis correctly shows Wikipedia instances"
     exit 0
 else
-    echo "❌ Task 3 FAILED: list_wikis does not show Wikipedia instances correctly"
+    echo "❌ Task 3 FAILED: list_wikipedia_wikis does not show Wikipedia instances correctly"
     exit 1
 fi

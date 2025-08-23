@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
 /**
- * Wikipedia MCP Server - 使用原生fetch的版本
+ * Wikipedia MCP Server - 专注于Wikipedia只读访问
+ * 使用纯Wikipedia API，无第三方依赖
  */
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
@@ -14,7 +15,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
-import { execSync } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -46,119 +46,189 @@ class WikipediaClient {
     this.language = config.language;
   }
 
-  // 使用curl进行HTTP请求
-  private async httpRequest(url: string): Promise<any> {
+  // 获取页面内容（wiki格式）
+  async getPage(title: string): Promise<string> {
     try {
-      const proxyArg = process.env.https_proxy ? `--proxy ${process.env.https_proxy}` : '';
-      const command = `curl -s --connect-timeout 30 --max-time 60 ${proxyArg} -H "User-Agent: Wikipedia-MCP/0.1.0" "${url}"`;
-
-      console.error(`[DEBUG] Executing curl command: ${command}`);
-      const output = execSync(command, {
-        encoding: 'utf8',
-        timeout: 60000
+      const params = new URLSearchParams({
+        action: 'query',
+        format: 'json',
+        titles: title,
+        prop: 'revisions',
+        rvprop: 'content',
+        rvslots: 'main',
+        formatversion: '2'
       });
 
-      console.error(`[DEBUG] curl output length: ${output.length}`);
-      return JSON.parse(output);
-    } catch (error: any) {
-      console.error(`[DEBUG] curl error:`, error);
-      throw new Error(`HTTP request failed: ${error.message}`);
+      // 创建AbortController用于超时控制
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30秒超时
+
+      const response = await fetch(`${this.apiUrl}?${params}`, {
+        method: 'GET',
+        headers: {
+          'User-Agent': 'Wikipedia-MCP/0.1.0'
+        },
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+
+      if (data.error) {
+        throw new Error(`Wikipedia API Error: ${data.error.info}`);
+      }
+
+      const pages = data.query?.pages;
+      if (!pages || pages.length === 0) {
+        throw new Error('No pages found in response');
+      }
+
+      const page = pages[0];
+      if (page.missing) {
+        throw new Error(`Page "${title}" not found`);
+      }
+
+      const revisions = page.revisions;
+      if (!revisions || revisions.length === 0) {
+        throw new Error(`No content found for page "${title}"`);
+      }
+
+      return revisions[0].slots.main.content || '';
+
+    } catch (error) {
+      throw error;
     }
   }
 
   // 获取页面内容和元数据
   async getPageWithMetadata(title: string): Promise<{ content: string, metadata: any }> {
-    const params = new URLSearchParams({
-      action: 'query',
-      format: 'json',
-      titles: title,
-      prop: 'revisions|info',
-      rvprop: 'content|timestamp|comment|user|size',
-      rvslots: 'main',
-      inprop: 'url|displaytitle',
-      formatversion: '2'
-    });
+    try {
+      const params = new URLSearchParams({
+        action: 'query',
+        format: 'json',
+        titles: title,
+        prop: 'revisions|info',
+        rvprop: 'content|timestamp|comment|user|size',
+        rvslots: 'main',
+        inprop: 'url|displaytitle',
+        formatversion: '2'
+      });
 
-    const url = `${this.apiUrl}?${params}`;
-    const data = await this.httpRequest(url);
+      const response = await fetch(`${this.apiUrl}?${params}`, {
+        method: 'GET',
+        headers: {
+          'User-Agent': 'Wikipedia-MCP/0.1.0'
+        }
+      });
 
-    if (data.error) {
-      throw new Error(`Wikipedia API Error: ${data.error.info}`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+
+      if (data.error) {
+        throw new Error(`Wikipedia API Error: ${data.error.info}`);
+      }
+
+      const pages = data.query?.pages;
+      if (!pages || pages.length === 0) {
+        throw new Error('No pages found in response');
+      }
+
+      const page = pages[0];
+      if (page.missing) {
+        throw new Error(`Page "${title}" not found`);
+      }
+
+      const revisions = page.revisions;
+      if (!revisions || revisions.length === 0) {
+        throw new Error(`No content found for page "${title}"`);
+      }
+
+      const content = revisions[0].slots.main.content || '';
+      const revision = revisions[0];
+
+      const metadata = {
+        title: page.title,
+        displaytitle: page.displaytitle || page.title,
+        pageid: page.pageid,
+        url: page.fullurl,
+        language: this.language,
+        size: revision.size || content.length,
+        timestamp: revision.timestamp,
+        user: revision.user,
+        comment: revision.comment,
+        retrieved_at: new Date().toISOString(),
+        content_length: content.length
+      };
+
+      return { content, metadata };
+
+    } catch (error) {
+      throw error;
     }
-
-    const pages = data.query?.pages;
-    if (!pages || pages.length === 0) {
-      throw new Error('No pages found in response');
-    }
-
-    const page = pages[0];
-    if (page.missing) {
-      throw new Error(`Page "${title}" not found`);
-    }
-
-    const revisions = page.revisions;
-    if (!revisions || revisions.length === 0) {
-      throw new Error(`No content found for page "${title}"`);
-    }
-
-    const content = revisions[0].slots.main.content || '';
-    const revision = revisions[0];
-
-    const metadata = {
-      title: page.title,
-      displaytitle: page.displaytitle || page.title,
-      pageid: page.pageid,
-      url: page.fullurl,
-      language: this.language,
-      size: revision.size || content.length,
-      timestamp: revision.timestamp,
-      user: revision.user,
-      comment: revision.comment,
-      retrieved_at: new Date().toISOString(),
-      content_length: content.length
-    };
-
-    return { content, metadata };
   }
 
   // 搜索页面
   async searchPages(query: string, limit: number = 10): Promise<any> {
-    const params = new URLSearchParams({
-      action: 'query',
-      format: 'json',
-      list: 'search',
-      srsearch: query,
-      srlimit: limit.toString(),
-      srprop: 'snippet|titlesnippet|size|wordcount|timestamp',
-      formatversion: '2'
-    });
+    try {
+      const params = new URLSearchParams({
+        action: 'query',
+        format: 'json',
+        list: 'search',
+        srsearch: query,
+        srlimit: limit.toString(),
+        srprop: 'snippet|titlesnippet|size|wordcount|timestamp',
+        formatversion: '2'
+      });
 
-    const url = `${this.apiUrl}?${params}`;
-    const data = await this.httpRequest(url);
+      const response = await fetch(`${this.apiUrl}?${params}`, {
+        method: 'GET',
+        headers: {
+          'User-Agent': 'Wikipedia-MCP/0.1.0'
+        }
+      });
 
-    if (data.error) {
-      throw new Error(`Wikipedia API Error: ${data.error.info}`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+
+      if (data.error) {
+        throw new Error(`Wikipedia API Error: ${data.error.info}`);
+      }
+
+      const searchResults = data.query?.search || [];
+
+      const formattedResults = searchResults.map((item: any) => ({
+        title: item.title,
+        snippet: this.cleanSnippet(item.snippet || ''),
+        size: item.size || 0,
+        wordcount: item.wordcount || 0,
+        timestamp: item.timestamp || ''
+      }));
+
+      return {
+        results: formattedResults,
+        total: formattedResults.length,
+        query: query,
+        limit: limit
+      };
+
+    } catch (error) {
+      throw error;
     }
-
-    const searchResults = data.query?.search || [];
-
-    const formattedResults = searchResults.map((item: any) => ({
-      title: item.title,
-      snippet: this.cleanSnippet(item.snippet || ''),
-      size: item.size || 0,
-      wordcount: item.wordcount || 0,
-      timestamp: item.timestamp || ''
-    }));
-
-    return {
-      results: formattedResults,
-      total: formattedResults.length,
-      query: query,
-      limit: limit
-    };
   }
 
   private cleanSnippet(snippet: string): string {
+    // 清理HTML标签和特殊字符
     return snippet.replace(/<[^>]*>/g, '').replace(/&[^;]+;/g, ' ').trim();
   }
 }
@@ -202,7 +272,7 @@ async function handleGetPage(args: any): Promise<any> {
     const outputBaseDir = process.env.WIKI_OUTPUT_DIR || process.cwd();
 
     // 按wiki分类保存
-    let wikiDirName: string;
+    let wikiDirName;
     switch (wiki) {
       case 'enwiki':
         wikiDirName = '.wikipedia_en';
@@ -256,7 +326,7 @@ async function handleGetPage(args: any): Promise<any> {
       }]
     };
 
-  } catch (error: any) {
+  } catch (error) {
     console.error(`[DEBUG] Error in handleGetPage:`, error);
     return {
       content: [{
@@ -284,6 +354,7 @@ async function handleWikiOperation(args: any): Promise<any> {
     throw new Error(`Only 'get' action is supported. Requested action: ${action}`);
   }
 
+  // 对于get操作，直接调用handleGetPage
   return await handleGetPage({ wiki, title });
 }
 
@@ -317,6 +388,7 @@ async function handleSearchPages(args: any): Promise<any> {
       };
     }
 
+    // 格式化搜索结果输出
     let resultText = `Found ${searchResult.total} result(s) for "${query}" in ${wiki} wiki:\n\n`;
 
     searchResult.results.forEach((result: any, index: number) => {
@@ -342,7 +414,7 @@ async function handleSearchPages(args: any): Promise<any> {
       }]
     };
 
-  } catch (error: any) {
+  } catch (error) {
     return {
       content: [{
         type: "text",

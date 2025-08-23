@@ -5,7 +5,7 @@ import path from 'path';
 console.log('Testing task 4: Verify Wikipedia article scraping functionality');
 
 // 启动MCP服务器
-const server = spawn('node', ['build/index.js'], {
+const server = spawn('node', ['./build/index.js'], {
   stdio: ['pipe', 'pipe', 'pipe']
 });
 
@@ -23,13 +23,13 @@ server.stderr.on('data', (data) => {
 // 测试用例
 const testCases = [
   {
-    name: 'get_page工具测试 - 获取English Wikipedia页面',
+    name: 'get_wikipedia_page工具测试 - 获取English Wikipedia页面',
     request: {
       "jsonrpc": "2.0",
       "id": 1,
       "method": "tools/call",
       "params": {
-        "name": "get_page",
+        "name": "get_wikipedia_page",
         "arguments": {
           "wiki": "enwiki",
           "title": "Machine Learning"
@@ -41,13 +41,13 @@ const testCases = [
     }
   },
   {
-    name: 'get_page工具测试 - 获取Chinese Wikipedia页面',
+    name: 'get_wikipedia_page工具测试 - 获取Chinese Wikipedia页面',
     request: {
       "jsonrpc": "2.0",
       "id": 2,
       "method": "tools/call",
       "params": {
-        "name": "get_page",
+        "name": "get_wikipedia_page",
         "arguments": {
           "wiki": "zhwiki",
           "title": "机器学习"
@@ -59,13 +59,13 @@ const testCases = [
     }
   },
   {
-    name: 'wiki_operation工具测试 - get操作',
+    name: 'wiki_wikipedia_operation工具测试 - get操作',
     request: {
       "jsonrpc": "2.0",
       "id": 3,
       "method": "tools/call",
       "params": {
-        "name": "wiki_operation",
+        "name": "wiki_wikipedia_operation",
         "arguments": {
           "wiki": "enwiki",
           "action": "get",
@@ -84,7 +84,7 @@ const testCases = [
       "id": 4,
       "method": "tools/call",
       "params": {
-        "name": "get_page",
+        "name": "get_wikipedia_page",
         "arguments": {
           "wiki": "enwiki",
           "title": "NonExistentPageThatShouldNotExist123456"
@@ -108,12 +108,12 @@ setTimeout(() => {
   console.log('\n=== Task 4 Test Results ===');
   
   // 基本功能检查
-  const hasGetPageTool = allOutput.includes('"name":"get_page"');
-  const hasWikiOperationTool = allOutput.includes('"name":"wiki_operation"');
+  const hasGetPageTool = allOutput.includes('"name":"get_wikipedia_page"');
+  const hasWikiOperationTool = allOutput.includes('"name":"wiki_wikipedia_operation"');
   
   console.log('Basic tool availability:');
-  console.log('  get_page tool present:', hasGetPageTool ? '✅' : '❌');
-  console.log('  wiki_operation tool present:', hasWikiOperationTool ? '✅' : '❌');
+  console.log('  get_wikipedia_page tool present:', hasGetPageTool ? '✅' : '❌');
+  console.log('  wiki_wikipedia_operation tool present:', hasWikiOperationTool ? '✅' : '❌');
   
   // 分析测试结果
   for (const testCase of testCases) {
