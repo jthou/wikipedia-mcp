@@ -4,6 +4,8 @@
  * MediaWiki MCP Server - 包含 list_wikipedia_wikis 和 get_wikipedia_page 功能
  */
 
+import { TOOL_NAMES } from './constants.js';
+
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
@@ -1052,7 +1054,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
       {
-        name: "list_wikipedia_wikis",
+        name: TOOL_NAMES.LIST_WIKIS,
         description: "List all available Wikipedia instances",
         inputSchema: {
           type: "object",
@@ -1163,7 +1165,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const toolName = request.params.name;
 
   switch (toolName) {
-    case "list_wikipedia_wikis":
+    case TOOL_NAMES.LIST_WIKIS:
       return await handleListWikis();
 
     case "wiki_wikipedia_operation":
