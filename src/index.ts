@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * MediaWiki MCP Server - 包含 list_wikis 和 get_page 功能
+ * MediaWiki MCP Server - 包含 list_wikipedia_wikis 和 get_wikipedia_page 功能
  */
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
@@ -109,7 +109,14 @@ class MediaWikiClient {
     await this.login();
 
     return new Promise((resolve, reject) => {
+      // 添加10秒超时
+      const timeout = setTimeout(() => {
+        reject(new Error(`Request timeout: Failed to retrieve page "${title}" within 10 seconds`));
+      }, 10000);
+
       this.client.getArticle(title, (err: Error, content: string) => {
+        clearTimeout(timeout);
+
         if (err) {
           reject(err);
         } else {
@@ -124,8 +131,15 @@ class MediaWikiClient {
     await this.login();
 
     return new Promise((resolve, reject) => {
+      // 添加10秒超时
+      const timeout = setTimeout(() => {
+        reject(new Error(`Request timeout: Failed to retrieve page "${title}" within 10 seconds`));
+      }, 10000);
+
       // 先获取页面内容，确保这部分工作
       this.client.getArticle(title, (err: Error, content: string) => {
+        clearTimeout(timeout);
+
         if (err) {
           reject(err);
           return;
@@ -416,21 +430,37 @@ async function handleWikiOperation(args: any): Promise<any> {
 
         // 获取输出目录：优先使用环境变量，然后使用当前工作目录
         const outputBaseDir = process.env.WIKI_OUTPUT_DIR || process.cwd();
-        const wikiDir = path.join(outputBaseDir, '.jthou_wiki');
+
+        // 按wiki分类保存：enwiki -> .wikipedia_en, zhwiki -> .wikipedia_zh
+        let wikiDirName;
+        switch (wiki) {
+          case 'enwiki':
+            wikiDirName = '.wikipedia_en';
+            break;
+          case 'zhwiki':
+            wikiDirName = '.wikipedia_zh';
+            break;
+          default:
+            wikiDirName = `.wikipedia_${wiki}`;
+            break;
+        }
+
+        const wikiDir = path.join(outputBaseDir, wikiDirName);
 
         if (!fs.existsSync(wikiDir)) {
           fs.mkdirSync(wikiDir, { recursive: true });
         }
 
-        // 写入页面内容到文件
-        const filename = `${title}.txt`;
+        // 优化文件命名：清理标题中的特殊字符
+        const sanitizedTitle = title.replace(/[<>:"/\\|?*]/g, '_').replace(/\s+/g, '_');
+        const filename = `${sanitizedTitle}.txt`;
         const filepath = path.join(wikiDir, filename);
         fs.writeFileSync(filepath, pageContent, 'utf8');
 
         return {
           content: [{
             type: "text",
-            text: `Successfully retrieved page "${title}" from ${wiki} and saved to ${filepath}`
+            text: `Successfully retrieved page "${title}" from ${wiki}\nSaved to: ${filepath}\nContent length: ${pageContent.length} characters`
           }]
         };
 
@@ -613,6 +643,8 @@ async function handleGetPage(args: any): Promise<any> {
   const wiki = String(args?.wiki || '');
   const title = String(args?.title || '');
 
+  console.error(`[DEBUG] handleGetPage called with wiki: ${wiki}, title: ${title}`);
+
   if (!wiki || !title) {
     throw new Error("Both 'wiki' and 'title' parameters are required");
   }
@@ -622,12 +654,32 @@ async function handleGetPage(args: any): Promise<any> {
   }
 
   try {
+    console.error(`[DEBUG] Creating MediaWikiClient for ${wiki}`);
     const client = new MediaWikiClient(wikiConfigs[wiki]);
+
+    console.error(`[DEBUG] Calling getPageWithMetadata for title: ${title}`);
     const { content, metadata } = await client.getPageWithMetadata(title);
+
+    console.error(`[DEBUG] Got content, length: ${content.length}`);
 
     // 获取输出目录：优先使用环境变量，然后使用当前工作目录
     const outputBaseDir = process.env.WIKI_OUTPUT_DIR || process.cwd();
-    const wikiDir = path.join(outputBaseDir, '.jthou_wiki');
+
+    // 按wiki分类保存：enwiki -> .wikipedia_en, zhwiki -> .wikipedia_zh
+    let wikiDirName;
+    switch (wiki) {
+      case 'enwiki':
+        wikiDirName = '.wikipedia_en';
+        break;
+      case 'zhwiki':
+        wikiDirName = '.wikipedia_zh';
+        break;
+      default:
+        wikiDirName = `.wikipedia_${wiki}`;
+        break;
+    }
+
+    const wikiDir = path.join(outputBaseDir, wikiDirName);
     const metadataDir = path.join(wikiDir, '.metadata');
 
     // 创建目录
@@ -638,23 +690,37 @@ async function handleGetPage(args: any): Promise<any> {
       fs.mkdirSync(metadataDir, { recursive: true });
     }
 
-    // 写入页面内容到文件
-    const filename = `${title}.txt`;
+    // 优化文件命名：清理标题中的特殊字符，避免文件系统问题
+    const sanitizedTitle = title.replace(/[<>:"/\\|?*]/g, '_').replace(/\s+/g, '_');
+    const filename = `${sanitizedTitle}.txt`;
     const filepath = path.join(wikiDir, filename);
+
+    // 写入页面内容到文件
     fs.writeFileSync(filepath, content, 'utf8');
 
     // 写入元数据文件
-    const metadataFilename = `${title}.json`;
+    const metadataFilename = `${sanitizedTitle}.json`;
     const metadataFilepath = path.join(metadataDir, metadataFilename);
-    fs.writeFileSync(metadataFilepath, JSON.stringify(metadata, null, 2), 'utf8');
+    const enhancedMetadata = {
+      ...metadata,
+      wiki: wiki,
+      original_title: title,
+      sanitized_title: sanitizedTitle,
+      saved_at: new Date().toISOString(),
+      content_length: content.length
+    };
+    fs.writeFileSync(metadataFilepath, JSON.stringify(enhancedMetadata, null, 2), 'utf8');
+
+    console.error(`[DEBUG] Successfully saved page to ${filepath}`);
 
     return {
       content: [{
         type: "text",
-        text: `Successfully retrieved page "${title}" from ${wiki} and saved to ${filepath}\nMetadata saved to ${metadataFilepath}`
+        text: `Successfully retrieved page "${title}" from ${wiki}\nContent saved to: ${filepath}\nMetadata saved to: ${metadataFilepath}\nContent length: ${content.length} characters`
       }]
     };
   } catch (error) {
+    console.error(`[DEBUG] Error in handleGetPage:`, error);
     return {
       content: [{
         type: "text",
@@ -662,9 +728,7 @@ async function handleGetPage(args: any): Promise<any> {
       }]
     };
   }
-}
-
-async function handleSearchPages(args: any): Promise<any> {
+} async function handleSearchPages(args: any): Promise<any> {
   const wiki = String(args?.wiki || '');
   const query = String(args?.query || '');
   const limit = Number(args?.limit || 10);
@@ -983,21 +1047,21 @@ const server = new Server(
   { capabilities: { tools: { listChanged: true } } }
 );
 
-// 列出可用工具：list_wikis 和 wiki_operation
+// 列出可用工具：list_wikipedia_wikis 和 wiki_wikipedia_operation
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
       {
-        name: "list_wikis",
-        description: "List all available MediaWiki instances",
+        name: "list_wikipedia_wikis",
+        description: "List all available Wikipedia instances",
         inputSchema: {
           type: "object",
           properties: {}
         }
       },
       {
-        name: "wiki_operation",
-        description: "Perform various operations on MediaWiki pages (get, create, update, append, prepend, delete, move)",
+        name: "wiki_wikipedia_operation",
+        description: "Perform various operations on Wikipedia pages (get, create, update, append, prepend, delete, move)",
         inputSchema: {
           type: "object",
           properties: {
@@ -1047,8 +1111,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         }
       },
       {
-        name: "get_page",
-        description: "Get content of a MediaWiki page from Wikipedia",
+        name: "get_wikipedia_page",
+        description: "Get Wikipedia page content with metadata",
         inputSchema: {
           type: "object",
           properties: {
@@ -1094,17 +1158,17 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   };
 });
 
-// 工具调用处理：处理 list_wikis, wiki_operation, get_page 和 search_pages
+// 工具调用处理：处理 list_wikipedia_wikis, wiki_wikipedia_operation, get_wikipedia_page 和 search_pages
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const toolName = request.params.name;
 
   switch (toolName) {
-    case "list_wikis":
+    case "list_wikipedia_wikis":
       return await handleListWikis();
 
-    case "wiki_operation":
+    case "wiki_wikipedia_operation":
       return await handleWikiOperation(request.params.arguments);
-    case "get_page":
+    case "get_wikipedia_page":
       // 直接调用 handleGetPage 以支持元数据保存
       return await handleGetPage(request.params.arguments);
 
