@@ -851,8 +851,8 @@ async function handleUploadFile(args: any): Promise<any> {
 
     return {
       content: [{
-          type: "text",
-          text: `Error uploading file: ${errorMessage}`
+        type: "text",
+        text: `Error uploading file: ${errorMessage}`
       }]
     };
   }
@@ -970,8 +970,8 @@ async function handleUploadFromClipboard(args: any): Promise<any> {
 
     return {
       content: [{
-          type: "text",
-          text: `Error uploading from clipboard: ${errorMessage}`
+        type: "text",
+        text: `Error uploading from clipboard: ${errorMessage}`
       }]
     };
   }
@@ -1047,8 +1047,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         }
       },
       {
-        name: "update_page",
-        description: "Update content of a MediaWiki page from Wikipedia",
+        name: "get_page",
+        description: "Get content of a MediaWiki page from Wikipedia",
         inputSchema: {
           type: "object",
           properties: {
@@ -1056,53 +1056,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               type: "string",
               description: "Wiki instance name",
               enum: ["enwiki", "zhwiki"]
-            },
-            title: {
-              type: "string",
-              description: "Page title"
-            },
-            content: {
-              type: "string",
-              description: "New page content (alternative to fromFile)"
-            },
-            fromFile: {
-              type: "string",
-              description: "Path to file containing new page content (alternative to content)"
-            },
-            summary: {
-              type: "string",
-              description: "Edit summary describing the changes"
-            },
-            mode: {
-              type: "string",
-              description: "Update mode",
-              enum: ["replace", "append", "prepend"],
-              default: "replace"
-            },
-            minor: {
-              type: "boolean",
-              description: "Mark as minor edit",
-              default: false
-            },
-            conflictResolution: {
-              type: "string",
-              description: "How to handle conflicts when using fromFile",
-              enum: ["detect", "force", "merge"],
-              default: "detect"
-            }
-          },
-          required: ["wiki", "title", "summary"]
-        }
-      },
-      {
-        name: "get_page",
-        description: "Get content of a MediaWiki page from Wikipedia (legacy, use wiki_operation with action='get' instead)",
-        inputSchema: {
-          type: "object",
-          properties: {
-            wiki: {
-              type: "string",
-              description: "Wiki instance name (currently only 'enwiki' and 'zhwiki' are supported)"
             },
             title: {
               type: "string",
@@ -1114,7 +1067,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "search_pages",
-        description: "Search for pages in MediaWiki that contain specific terms",
+        description: "Search for pages in MediaWiki",
         inputSchema: {
           type: "object",
           properties: {
@@ -1125,97 +1078,23 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             query: {
               type: "string",
-              description: "Search terms or query"
+              description: "Search query"
             },
             limit: {
               type: "number",
               description: "Maximum number of results to return",
-              default: 10,
-              minimum: 1,
-              maximum: 50
-            },
-            namespace: {
-              type: "array",
-              description: "Namespaces to search (0=main, 1=talk, etc.)",
-              items: {
-                type: "number"
-              },
-              default: [0]
+              default: 10
             }
           },
           required: ["wiki", "query"]
         }
-      },
-      {
-        name: "upload_file",
-        description: "Upload a file to MediaWiki and return a direct pasteable reference like [[File:XXX]]",
-        inputSchema: {
-          type: "object",
-          properties: {
-            wiki: {
-              type: "string",
-              description: "Wiki instance name",
-              enum: ["enwiki", "zhwiki"]
-            },
-            fromFile: {
-              type: "string",
-              description: "Path to local file to upload (mutually exclusive with fromUrl)"
-            },
-            fromUrl: {
-              type: "string",
-              description: "URL of file to upload (mutually exclusive with fromFile)"
-            },
-            title: {
-              type: "string",
-              description: "File title (if not provided, will be derived from filename or URL)"
-            },
-            comment: {
-              type: "string",
-              description: "Upload comment",
-              default: "Uploaded via MediaWiki MCP Server"
-            }
-          },
-          required: ["wiki"]
-        }
-      },
-      {
-        name: "upload_from_clipboard",
-        description: "Upload content from clipboard to MediaWiki and return a direct pasteable reference like [[File:XXX]]",
-        inputSchema: {
-          type: "object",
-          properties: {
-            wiki: {
-              type: "string",
-              description: "Wiki instance name",
-              enum: ["enwiki", "zhwiki"]
-            },
-            clipboardType: {
-              type: "string",
-              description: "Type of clipboard content",
-              enum: ["image", "file", "text"]
-            },
-            clipboardData: {
-              type: "string",
-              description: "Base64 encoded clipboard data"
-            },
-            title: {
-              type: "string",
-              description: "File title (if not provided, will be generated automatically)"
-            },
-            comment: {
-              type: "string",
-              description: "Upload comment",
-              default: "Uploaded from clipboard via MediaWiki MCP Server"
-            }
-          },
-          required: ["wiki", "clipboardType", "clipboardData"]
-        }
       }
+      // ...existing code...
     ]
   };
 });
 
-// 工具调用处理：处理 list_wikis, wiki_operation, update_page 和 get_page（向后兼容）
+// 工具调用处理：处理 list_wikis, wiki_operation, get_page 和 search_pages
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const toolName = request.params.name;
 
@@ -1225,22 +1104,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     case "wiki_operation":
       return await handleWikiOperation(request.params.arguments);
-
-    case "update_page":
-      return await handleUpdatePage(request.params.arguments);
-
     case "get_page":
       // 直接调用 handleGetPage 以支持元数据保存
       return await handleGetPage(request.params.arguments);
 
     case "search_pages":
       return await handleSearchPages(request.params.arguments);
-
-    case "upload_file":
-      return await handleUploadFile(request.params.arguments);
-
-    case "upload_from_clipboard":
-      return await handleUploadFromClipboard(request.params.arguments);
 
     default:
       throw new Error(`Unknown tool: ${toolName}`);

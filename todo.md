@@ -46,29 +46,29 @@
     - [x] 代码提交在 task1 分支。
     - [x] 测试脚本 test/task1.sh 可自动化验证。
     - [x] 通过所有回归测试。
-[ ] 任务2：删除不需要的功能（详细设计）
+[x] 任务2：删除不需要的功能（详细设计）
   - 目标：
-    - [ ] 移除 update_page、upload_file、upload_from_clipboard 等相关工具和实现代码。
-    - [ ] 清理 schema、工具列表和相关测试脚本，确保只保留抓取和查询相关功能。
+    - [x] 移除 update_page、upload_file、upload_from_clipboard 等相关工具和实现代码。
+    - [x] 清理 schema、工具列表和相关测试脚本，确保只保留抓取和查询相关功能。
   - 步骤：
-    - [ ] 在 src/index.ts 中删除 update_page、upload_file、upload_from_clipboard 相关 handler 和工具注册。
-    - [ ] 清理工具 schema，移除上述功能的 schema 定义。
-    - [ ] 在 server 的工具调用分发逻辑中移除相关分支。
-    - [ ] 删除或重命名相关测试脚本（如 test/task_update_page.sh、test/task_upload_file.sh）。
-    - [ ] 检查 README.md 和文档，移除不再支持的功能说明。
+    - [x] 在 src/index.ts 中删除 update_page、upload_file、upload_from_clipboard 相关 handler 和工具注册。
+    - [x] 清理工具 schema，移除上述功能的 schema 定义。
+    - [x] 在 server 的工具调用分发逻辑中移除相关分支。
+    - [x] 删除或重命名相关测试脚本（如 test/task_update_page.sh、test/task_upload_file.sh）。
+    - [x] 检查 README.md 和文档，移除不再支持的功能说明。
   - 测试要求：
-    - [ ] 创建测试脚本 test/task2.sh，验证 update_page、upload_file、upload_from_clipboard 等功能已无法调用。
-    - [ ] 验证工具列表和 schema 中无上述功能。
-    - [ ] 回归测试，确保剩余功能正常。
+    - [x] 创建测试脚本 test/task2.sh，验证 update_page、upload_file、upload_from_clipboard 等功能已无法调用。
+    - [x] 验证工具列表和 schema 中无上述功能。
+    - [x] 回归测试，确保剩余功能正常。
   - 测试步骤：
     1. 编写自动化测试脚本启动 MCP 服务器
     2. 脚本自动向服务器发送 tools/call 请求，尝试调用被移除的工具
     3. 验证服务器返回错误信息，表明工具不存在
     4. 在 test/task2.sh 中调用测试脚本并检查结果
   - 交付标准：
-    - [ ] 代码提交在 task2 分支。
-    - [ ] 测试脚本 test/task2.sh 可自动化验证。
-    - [ ] 通过所有回归测试。
+    - [x] 代码提交在 task2 分支。
+    - [x] 测试脚本 test/task2.sh 可自动化验证。
+    - [x] 通过所有回归测试。
 [ ] 任务3：支持 Wikipedia 配置（详细设计）
   - 目标：
     - [ ] 在 wikiConfigs 中添加 en.wikipedia.org、zh.wikipedia.org 等 Wikipedia 配置项。
