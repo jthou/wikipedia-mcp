@@ -69,9 +69,9 @@
     - [x] 代码提交在 task2 分支。
     - [x] 测试脚本 test/task2.sh 可自动化验证。
     - [x] 通过所有回归测试。
-[ ] 任务3：支持 Wikipedia 配置（详细设计）
+[x] 任务3：支持 Wikipedia 配置（详细设计）
   - 目标：
-    - [ ] 在 wikiConfigs 中添加 en.wikipedia.org、zh.wikipedia.org 等 Wikipedia 配置项。
+    - [x] 在 wikiConfigs 中添加 en.wikipedia.org、zh.wikipedia.org 等 Wikipedia 配置项。
     - [x] list_wikis 工具能正确显示 Wikipedia 实例。（已完成）
   - 步骤：
     - [x] 在 src/index.ts 的 wikiConfigs 中补充 enwiki、zhwiki 等 Wikipedia API 地址。（已完成）
