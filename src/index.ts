@@ -46,12 +46,7 @@ const wikiConfigs: {
     password?: string;
   }
 } = {
-  Jthou: {
-    apiUrl: process.env.JTHOU_API_URL || "http://www.jthou.com/mediawiki/api.php",
-    username: process.env.JTHOU_USERNAME,
-    password: process.env.JTHOU_PASSWORD
-  },
-  // 添加Wikipedia配置项，支持匿名访问
+  // Wikipedia配置项，支持匿名访问
   enwiki: {
     apiUrl: "https://en.wikipedia.org/w/api.php"
     // Wikipedia不需要用户名和密码，支持匿名访问
@@ -177,7 +172,7 @@ class MediaWikiClient {
                       resolve(retryResult);
                     }
                   };
-                  
+
                   switch (mode) {
                     case 'append':
                       this.client.append(title, content, summary, retryCallback);
@@ -219,22 +214,22 @@ class MediaWikiClient {
       } catch (error) {
         lastError = error as Error;
         console.error(`Update attempt ${attempt} failed:`, error);
-        
+
         // 如果是最后一次尝试，或者不是网络错误/token错误，则不重试
-        if (attempt === maxRetries || 
-            (!(error as Error).message.includes('ETIMEDOUT') && 
-             !(error as Error).message.includes('ENOTFOUND') && 
-             !(error as Error).message.includes('ECONNRESET') &&
-             !(error as Error).message.includes('badtoken') && 
-             !(error as Error).message.includes('Invalid token'))) {
+        if (attempt === maxRetries ||
+          (!(error as Error).message.includes('ETIMEDOUT') &&
+            !(error as Error).message.includes('ENOTFOUND') &&
+            !(error as Error).message.includes('ECONNRESET') &&
+            !(error as Error).message.includes('badtoken') &&
+            !(error as Error).message.includes('Invalid token'))) {
           break;
         }
-        
+
         // 等待一段时间再重试
         await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
       }
     }
-    
+
     // 所有重试都失败了
     throw new Error(`Failed to update page after ${maxRetries} attempts. Last error: ${lastError?.message}`);
   }
@@ -302,11 +297,11 @@ class MediaWikiClient {
       });
     });
   }
-  
+
   // 添加文件信息获取方法
   async getFileInfo(filename: string): Promise<any> {
     await this.login();
-    
+
     return new Promise((resolve, reject) => {
       this.client.getImageInfo(`File:${filename}`, (err: Error, data: any) => {
         if (err) {
@@ -317,14 +312,14 @@ class MediaWikiClient {
       });
     });
   }
-  
+
   // 添加文件上传方法（从本地文件）
   async uploadFile(localPath: string, title: string, comment: string): Promise<any> {
     await this.login();
-    
+
     // 读取文件内容
     const content = fs.readFileSync(localPath);
-    
+
     return new Promise((resolve, reject) => {
       // 使用 nodemw 的 upload 方法
       this.client.upload(title, content, comment, (err: Error, data: any) => {
@@ -336,11 +331,11 @@ class MediaWikiClient {
       });
     });
   }
-  
+
   // 添加从URL上传文件的方法
   async uploadFileFromUrl(url: string, title: string, comment: string): Promise<any> {
     await this.login();
-    
+
     return new Promise((resolve, reject) => {
       // 使用 nodemw 的 uploadByUrl 方法
       this.client.uploadByUrl(title, url, comment, (err: Error, data: any) => {
@@ -352,11 +347,11 @@ class MediaWikiClient {
       });
     });
   }
-  
+
   // 添加从剪贴板数据上传的方法
   async uploadFromClipboard(clipboardData: string, clipboardType: string, title: string, comment: string): Promise<any> {
     await this.login();
-    
+
     // 根据剪贴板类型确定文件扩展名
     let extension = '';
     switch (clipboardType) {
@@ -369,12 +364,12 @@ class MediaWikiClient {
       default:
         extension = '.bin';
     }
-    
+
     // 如果标题没有提供扩展名，则添加默认扩展名
     if (title && !path.extname(title)) {
       title += extension;
     }
-    
+
     return new Promise((resolve, reject) => {
       // 使用 nodemw 的 upload 方法
       this.client.upload(title, clipboardData, comment, (err: Error, data: any) => {
@@ -763,7 +758,7 @@ async function handleUploadFile(args: any): Promise<any> {
 
   try {
     const client = new MediaWikiClient(wikiConfigs[wiki]);
-    
+
     // 规范化文件标题
     let finalTitle = title;
     if (!finalTitle) {
@@ -779,15 +774,15 @@ async function handleUploadFile(args: any): Promise<any> {
         }
       }
     }
-    
+
     // 确保文件标题以"File:"开头
     if (!finalTitle.startsWith("File:")) {
       finalTitle = `File:${finalTitle}`;
     }
-    
+
     // 清理文件名（处理空格和扩展名大小写）
     finalTitle = finalTitle.replace(/\s+/g, '_');
-    
+
     // 执行上传前检查
     let result: any;
     if (fromFile) {
@@ -795,13 +790,13 @@ async function handleUploadFile(args: any): Promise<any> {
       if (!fs.existsSync(fromFile)) {
         throw new Error(`File not found: ${fromFile}`);
       }
-      
+
       // 检查文件类型和大小（简单检查）
       const fileStats = fs.statSync(fromFile);
       if (fileStats.size > 10 * 1024 * 1024) { // 10MB限制
         throw new Error(`File too large: ${fromFile}. Maximum size is 10MB.`);
       }
-      
+
       // 执行文件上传
       result = await client.uploadFile(fromFile, finalTitle, comment);
     } else {
@@ -810,11 +805,11 @@ async function handleUploadFile(args: any): Promise<any> {
       if (!fromUrl.startsWith('http://') && !fromUrl.startsWith('https://')) {
         throw new Error(`Invalid URL scheme. Only http:// and https:// are supported.`);
       }
-      
+
       // 执行URL上传
       result = await client.uploadFileFromUrl(fromUrl, finalTitle, comment);
     }
-    
+
     // 检查上传结果
     if (result && result.result && result.result === "Success") {
       // 返回文件引用
@@ -833,7 +828,7 @@ async function handleUploadFile(args: any): Promise<any> {
   } catch (error) {
     // 提供更详细的错误信息
     const errorMessage = error instanceof Error ? error.message : String(error);
-    
+
     // 特殊处理权限错误
     if (errorMessage.includes("readapidenied") || errorMessage.includes("permission")) {
       return {
@@ -843,7 +838,7 @@ async function handleUploadFile(args: any): Promise<any> {
         }]
       };
     }
-    
+
     // 特殊处理网络错误
     if (errorMessage.includes("HTTP status")) {
       return {
@@ -853,11 +848,11 @@ async function handleUploadFile(args: any): Promise<any> {
         }]
       };
     }
-    
+
     return {
       content: [{
-        type: "text",
-        text: `Error uploading file: ${errorMessage}`
+          type: "text",
+          text: `Error uploading file: ${errorMessage}`
       }]
     };
   }
@@ -894,7 +889,7 @@ async function handleUploadFromClipboard(args: any): Promise<any> {
 
   try {
     const client = new MediaWikiClient(wikiConfigs[wiki]);
-    
+
     // 规范化文件标题
     let finalTitle = title;
     if (!finalTitle) {
@@ -902,15 +897,15 @@ async function handleUploadFromClipboard(args: any): Promise<any> {
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_').substring(0, 19);
       finalTitle = `Clipboard_${clipboardType}_${timestamp}`;
     }
-    
+
     // 确保文件标题以"File:"开头
     if (!finalTitle.startsWith("File:")) {
       finalTitle = `File:${finalTitle}`;
     }
-    
+
     // 清理文件名（处理空格和扩展名大小写）
     finalTitle = finalTitle.replace(/\s+/g, '_');
-    
+
     // 根据剪贴板类型确定文件扩展名
     let extension = '';
     switch (clipboardType) {
@@ -925,15 +920,15 @@ async function handleUploadFromClipboard(args: any): Promise<any> {
         extension = path.extname(finalTitle) || '.bin';
         break;
     }
-    
+
     // 如果标题没有提供扩展名，则添加默认扩展名
     if (!path.extname(finalTitle)) {
       finalTitle += extension;
     }
-    
+
     // 执行上传
     const result = await client.uploadFromClipboard(clipboardData, clipboardType, finalTitle, comment);
-    
+
     // 检查上传结果
     if (result && result.result && result.result === "Success") {
       // 返回文件引用
@@ -952,7 +947,7 @@ async function handleUploadFromClipboard(args: any): Promise<any> {
   } catch (error) {
     // 提供更详细的错误信息
     const errorMessage = error instanceof Error ? error.message : String(error);
-    
+
     // 特殊处理权限错误
     if (errorMessage.includes("readapidenied") || errorMessage.includes("permission")) {
       return {
@@ -962,7 +957,7 @@ async function handleUploadFromClipboard(args: any): Promise<any> {
         }]
       };
     }
-    
+
     // 特殊处理网络错误
     if (errorMessage.includes("HTTP status")) {
       return {
@@ -972,11 +967,11 @@ async function handleUploadFromClipboard(args: any): Promise<any> {
         }]
       };
     }
-    
+
     return {
       content: [{
-        type: "text",
-        text: `Error uploading from clipboard: ${errorMessage}`
+          type: "text",
+          text: `Error uploading from clipboard: ${errorMessage}`
       }]
     };
   }
@@ -1009,7 +1004,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             wiki: {
               type: "string",
               description: "Wiki instance name",
-              enum: ["Jthou", "enwiki", "zhwiki"]
+              enum: ["enwiki", "zhwiki"]
             },
             action: {
               type: "string",
@@ -1053,14 +1048,14 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "update_page",
-        description: "Update content of a MediaWiki page from Jthou wiki",
+        description: "Update content of a MediaWiki page from Wikipedia",
         inputSchema: {
           type: "object",
           properties: {
             wiki: {
               type: "string",
               description: "Wiki instance name",
-              enum: ["Jthou", "enwiki", "zhwiki"]
+              enum: ["enwiki", "zhwiki"]
             },
             title: {
               type: "string",
@@ -1101,13 +1096,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "get_page",
-        description: "Get content of a MediaWiki page from Jthou wiki (legacy, use wiki_operation with action='get' instead)",
+        description: "Get content of a MediaWiki page from Wikipedia (legacy, use wiki_operation with action='get' instead)",
         inputSchema: {
           type: "object",
           properties: {
             wiki: {
               type: "string",
-              description: "Wiki instance name (currently only 'Jthou' is supported)"
+              description: "Wiki instance name (currently only 'enwiki' and 'zhwiki' are supported)"
             },
             title: {
               type: "string",
@@ -1126,7 +1121,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             wiki: {
               type: "string",
               description: "Wiki instance name",
-              enum: ["Jthou", "enwiki", "zhwiki"]
+              enum: ["enwiki", "zhwiki"]
             },
             query: {
               type: "string",
@@ -1160,7 +1155,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             wiki: {
               type: "string",
               description: "Wiki instance name",
-              enum: ["Jthou", "enwiki", "zhwiki"]
+              enum: ["enwiki", "zhwiki"]
             },
             fromFile: {
               type: "string",
@@ -1192,7 +1187,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             wiki: {
               type: "string",
               description: "Wiki instance name",
-              enum: ["Jthou", "enwiki", "zhwiki"]
+              enum: ["enwiki", "zhwiki"]
             },
             clipboardType: {
               type: "string",
@@ -1240,10 +1235,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     case "search_pages":
       return await handleSearchPages(request.params.arguments);
-      
+
     case "upload_file":
       return await handleUploadFile(request.params.arguments);
-      
+
     case "upload_from_clipboard":
       return await handleUploadFromClipboard(request.params.arguments);
 

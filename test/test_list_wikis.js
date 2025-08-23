@@ -5,26 +5,34 @@ const server = spawn('node', ['build/index.js'], {
   stdio: ['pipe', 'pipe', 'pipe']
 });
 
-let responseReceived = false;
 let response = '';
+let listToolsReceived = false;
+let callToolReceived = false;
 
 // 监听服务器的stdout
 server.stdout.on('data', (data) => {
   const output = data.toString();
   response += output;
   
+  // 检查是否收到了tools/list响应
+  if (output.includes('"method":"tools/list"') || output.includes('"result":{"tools"')) {
+    listToolsReceived = true;
+  }
+  
+  // 检查是否收到了tools/call响应
+  if (output.includes('"method":"tools/call"') || output.includes('Available MediaWiki instances')) {
+    callToolReceived = true;
+  }
+  
   // 检查是否收到了完整的响应
-  if (response.includes('"method":"tools/list"') && response.includes('"method":"tools/call"')) {
-    responseReceived = true;
-    
-    // 检查响应中是否包含list_wikis工具和Jthou wiki
-    if (response.includes('list_wikis') && response.includes('Jthou')) {
-      console.log('✅ Task 1 PASSED: list_wikis tool is available and shows Jthou wiki');
-      console.log('Response:', response);
+  if (listToolsReceived && callToolReceived) {
+    // 检查响应中是否包含list_wikis工具和Wikipedia wiki
+    if (response.includes('list_wikis') && response.includes('enwiki') && response.includes('zhwiki')) {
+      console.log('✅ Task 1 PASSED: list_wikis tool is available and shows Wikipedia instances');
     } else {
-      console.log('❌ Task 1 FAILED: list_wikis tool or Jthou wiki not found in response');
-      console.log('Response:', response);
+      console.log('❌ Task 1 FAILED: list_wikis tool or Wikipedia instances not found in response');
     }
+    console.log('Response:', response);
     
     // 关闭服务器
     server.kill();
@@ -47,8 +55,8 @@ setTimeout(() => {
 
 // 设置超时，如果5秒内没有收到响应则关闭服务器
 setTimeout(() => {
-  if (!responseReceived) {
-    console.log('❌ Task 1 FAILED: No response received within 5 seconds');
+  if (!listToolsReceived || !callToolReceived) {
+    console.log('❌ Task 1 FAILED: Incomplete response received within 5 seconds');
     console.log('Response so far:', response);
     server.kill();
   }
