@@ -44,7 +44,101 @@ const envVars = {
   wikipediaZhApi: process.env.WIKIPEDIA_ZH_API || 'https://zh.wikipedia.org/w/api.php'
 };
 
-// 可用的 wiki 配置
+// 清理和归档旧抓取结果的功能
+function cleanupOldFiles(wikiDir: string, maxFiles: number = 100, maxAgeDays: number = 30): void {
+  if (!fs.existsSync(wikiDir)) {
+    return;
+  }
+
+  try {
+    const files = fs.readdirSync(wikiDir)
+      .filter(file => file.endsWith('.txt'))
+      .map(file => {
+        const filepath = path.join(wikiDir, file);
+        const stats = fs.statSync(filepath);
+        return {
+          name: file,
+          path: filepath,
+          mtime: stats.mtime,
+          size: stats.size
+        };
+      })
+      .sort((a, b) => b.mtime.getTime() - a.mtime.getTime()); // 按修改时间排序
+
+    const now = new Date();
+    const maxAge = maxAgeDays * 24 * 60 * 60 * 1000; // 转换为毫秒
+
+    // 删除过旧文件
+    const filesToDelete = files.filter(file => {
+      const age = now.getTime() - file.mtime.getTime();
+      return age > maxAge;
+    });
+
+    // 删除超出数量限制的文件
+    if (files.length > maxFiles) {
+      const excessFiles = files.slice(maxFiles);
+      filesToDelete.push(...excessFiles);
+    }
+
+    // 执行删除
+    filesToDelete.forEach(file => {
+      try {
+        fs.unlinkSync(file.path);
+        // 同时删除对应的元数据文件
+        const metadataPath = path.join(wikiDir, '.metadata', file.name.replace('.txt', '.json'));
+        if (fs.existsSync(metadataPath)) {
+          fs.unlinkSync(metadataPath);
+        }
+        console.log(`[CLEANUP] Deleted old file: ${file.name}`);
+      } catch (error) {
+        console.error(`[CLEANUP] Failed to delete ${file.name}:`, error);
+      }
+    });
+
+    if (filesToDelete.length > 0) {
+      console.log(`[CLEANUP] Cleaned up ${filesToDelete.length} old files from ${wikiDir}`);
+    }
+  } catch (error) {
+    console.error(`[CLEANUP] Error during cleanup of ${wikiDir}:`, error);
+  }
+}
+
+// 获取文件夹大小和统计信息
+function getDirectoryStats(wikiDir: string): { fileCount: number, totalSize: number, oldestFile?: Date, newestFile?: Date } {
+  if (!fs.existsSync(wikiDir)) {
+    return { fileCount: 0, totalSize: 0 };
+  }
+
+  try {
+    const files = fs.readdirSync(wikiDir)
+      .filter(file => file.endsWith('.txt'))
+      .map(file => {
+        const filepath = path.join(wikiDir, file);
+        const stats = fs.statSync(filepath);
+        return {
+          mtime: stats.mtime,
+          size: stats.size
+        };
+      });
+
+    if (files.length === 0) {
+      return { fileCount: 0, totalSize: 0 };
+    }
+
+    const totalSize = files.reduce((sum, file) => sum + file.size, 0);
+    const sortedByTime = files.sort((a, b) => a.mtime.getTime() - b.mtime.getTime());
+
+    return {
+      fileCount: files.length,
+      totalSize,
+      oldestFile: sortedByTime[0].mtime,
+      newestFile: sortedByTime[sortedByTime.length - 1].mtime
+    };
+  } catch (error) {
+    console.error(`[STATS] Error getting directory stats for ${wikiDir}:`, error);
+    return { fileCount: 0, totalSize: 0 };
+  }
+}
 const wikiConfigs: {
   [key: string]: WikiConfig
 } = {
@@ -101,10 +195,26 @@ async function handleWikiOperation(args: any): Promise<any> {
           fs.mkdirSync(wikiDir, { recursive: true });
         }
 
-        // 优化文件命名：清理标题中的特殊字符
-        const sanitizedTitle = title.replace(/[<>:"/\\|?*]/g, '_').replace(/\s+/g, '_');
-        const filename = `${sanitizedTitle}.txt`;
-        const filepath = path.join(wikiDir, filename);
+        // 优化文件命名：清理标题中的特殊字符，添加长度限制和时间戳
+        let sanitizedTitle = title.replace(/[<>:"/\\|?*]/g, '_').replace(/\s+/g, '_');
+
+        // 限制文件名长度，避免文件系统限制
+        const maxFilenameLength = 200;
+        if (sanitizedTitle.length > maxFilenameLength) {
+          sanitizedTitle = sanitizedTitle.substring(0, maxFilenameLength);
+        }
+
+        // 添加时间戳避免重复
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
+        const baseFilename = sanitizedTitle;
+        let filename = `${baseFilename}.txt`;
+        let filepath = path.join(wikiDir, filename);
+
+        // 检查文件是否已存在，如果存在则添加时间戳后缀
+        if (fs.existsSync(filepath)) {
+          filename = `${baseFilename}_${timestamp}.txt`;
+          filepath = path.join(wikiDir, filename);
+        }
         fs.writeFileSync(filepath, pageContent, 'utf8');
 
         return {
@@ -204,16 +314,32 @@ async function handleGetPage(args: any): Promise<any> {
       fs.mkdirSync(metadataDir, { recursive: true });
     }
 
-    // 优化文件命名：清理标题中的特殊字符，避免文件系统问题
-    const sanitizedTitle = title.replace(/[<>:"/\\|?*]/g, '_').replace(/\s+/g, '_');
-    const filename = `${sanitizedTitle}.txt`;
-    const filepath = path.join(wikiDir, filename);
+    // 优化文件命名：清理标题中的特殊字符，添加长度限制和时间戳处理
+    let sanitizedTitle = title.replace(/[<>:"/\\|?*]/g, '_').replace(/\s+/g, '_');
+
+    // 限制文件名长度，避免文件系统限制
+    const maxFilenameLength = 200;
+    if (sanitizedTitle.length > maxFilenameLength) {
+      sanitizedTitle = sanitizedTitle.substring(0, maxFilenameLength);
+    }
+
+    // 添加时间戳避免重复
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
+    const baseFilename = sanitizedTitle;
+    let filename = `${baseFilename}.txt`;
+    let filepath = path.join(wikiDir, filename);
+
+    // 检查文件是否已存在，如果存在则添加时间戳后缀
+    if (fs.existsSync(filepath)) {
+      filename = `${baseFilename}_${timestamp}.txt`;
+      filepath = path.join(wikiDir, filename);
+    }
 
     // 写入页面内容到文件
     fs.writeFileSync(filepath, content, 'utf8');
 
     // 写入元数据文件
-    const metadataFilename = `${sanitizedTitle}.json`;
+    const metadataFilename = `${baseFilename}.json`;
     const metadataFilepath = path.join(metadataDir, metadataFilename);
     const enhancedMetadata = {
       ...metadata,
@@ -221,16 +347,25 @@ async function handleGetPage(args: any): Promise<any> {
       original_title: title,
       sanitized_title: sanitizedTitle,
       saved_at: new Date().toISOString(),
-      content_length: content.length
+      content_length: content.length,
+      filename: filename
     };
     fs.writeFileSync(metadataFilepath, JSON.stringify(enhancedMetadata, null, 2), 'utf8');
+
+    // 执行清理旧文件（保留最近100个文件，30天内的文件）
+    const maxFiles = Number(process.env.MAX_CACHED_FILES) || 100;
+    const maxAgeDays = Number(process.env.MAX_FILE_AGE_DAYS) || 30;
+    cleanupOldFiles(wikiDir, maxFiles, maxAgeDays);
+
+    // 获取目录统计信息
+    const dirStats = getDirectoryStats(wikiDir);
 
     console.error(`[DEBUG] Successfully saved page to ${filepath}`);
 
     return {
       content: [{
         type: "text",
-        text: `Successfully retrieved page "${title}" from ${wiki}\nContent saved to: ${filepath}\nMetadata saved to: ${metadataFilepath}\nContent length: ${content.length} characters`
+        text: `Successfully retrieved page "${title}" from ${wiki}\nContent saved to: ${filepath}\nMetadata saved to: ${metadataFilepath}\nContent length: ${content.length} characters\n\nDirectory stats:\n- Files in cache: ${dirStats.fileCount}\n- Total cache size: ${(dirStats.totalSize / 1024 / 1024).toFixed(2)} MB\n- Oldest file: ${dirStats.oldestFile ? dirStats.oldestFile.toISOString() : 'N/A'}\n- Newest file: ${dirStats.newestFile ? dirStats.newestFile.toISOString() : 'N/A'}`
       }]
     };
   } catch (error) {
