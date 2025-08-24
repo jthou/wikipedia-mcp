@@ -159,27 +159,27 @@
     - [x] 代码提交在 task6 分支。
     - [x] 测试脚本 test/task6.sh 可自动化验证。
     - [x] 通过所有回归测试。
-[ ] 任务7：文档与说明更新（详细设计）
+[x] 任务7：文档与说明更新（详细设计）
   - 目标：
-    - [ ] 更新 README.md，说明支持 Wikipedia 抓取。
-    - [ ] 列出所有支持的 wiki 实例和用法。
-    - [ ] 补充工具使用示例和常见问题说明。
+    - [x] 更新 README.md，说明支持 Wikipedia 抓取。
+    - [x] 列出所有支持的 wiki 实例和用法。
+    - [x] 补充工具使用示例和常见问题说明。
   - 步骤：
-    - [ ] 修改 README.md，补充 Wikipedia 相关说明和配置方法。
-    - [ ] 列出所有 wikiConfigs 支持的 wiki 实例。
-    - [ ] 补充 list_wikipedia_wikis、get_wikipedia_page、wiki_wikipedia_operation 等工具的使用示例。
-    - [ ] 说明异常处理和边界情况。
-    - [ ] 更新测试脚本和开发流程说明。
+    - [x] 修改 README.md，补充 Wikipedia 相关说明和配置方法。
+    - [x] 列出所有 wikiConfigs 支持的 wiki 实例。
+    - [x] 补充 list_wikipedia_wikis、get_wikipedia_page、wiki_wikipedia_operation 等工具的使用示例。
+    - [x] 说明异常处理和边界情况。
+    - [x] 更新测试脚本和开发流程说明。
   - 测试要求：
-    - [ ] 创建测试脚本 test/task7.sh，验证文档内容完整性和准确性。
-    - [ ] 检查 README.md 是否包含所有要求内容。
-    - [ ] 验证工具使用示例可复现。
+    - [x] 创建测试脚本 test/task7.sh，验证文档内容完整性和准确性。
+    - [x] 检查 README.md 是否包含所有要求内容。
+    - [x] 验证工具使用示例可复现。
   - 测试步骤：
     1. 编写自动化测试脚本检查文档内容
     2. 验证 README.md 中包含所有必要的信息和使用示例
     3. 验证文档中描述的功能与实际实现一致
     4. 在 test/task7.sh 中调用测试脚本并检查结果
   - 交付标准：
-    - [ ] 代码提交在 task7 分支。
-    - [ ] 测试脚本 test/task7.sh 可自动化验证。
-    - [ ] 通过所有回归测试。
+    - [x] 代码提交在 task7 分支。
+    - [x] 测试脚本 test/task7.sh 可自动化验证。
+    - [x] 通过所有回归测试。
