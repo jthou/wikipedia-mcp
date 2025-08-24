@@ -91,50 +91,52 @@
     - [x] 代码提交在 task3 分支。（已完成）
     - [x] 测试脚本 test/task3.sh 可自动化验证。（已完成）
     - [x] 通过所有回归测试。（已完成）
-[ ] 任务4：实现 Wikipedia 文章抓取（详细设计）
+[x] 任务4：实现 Wikipedia 文章抓取（详细设计）
   - 目标：
-    - [ ] 支持通过 get_wikipedia_page、wiki_wikipedia_operation 等工具抓取 Wikipedia 文章内容。
-    - [ ] 工具能正确获取并输出 Wikipedia 页面内容。
+    - [x] 支持通过 get_wikipedia_page、wiki_wikipedia_operation 等工具抓取 Wikipedia 文章内容。
+    - [x] 工具能正确获取并输出 Wikipedia 页面内容。
   - 步骤：
-    - [ ] 修改/实现 get_wikipedia_page、wiki_wikipedia_operation 工具，支持 Wikipedia API。
-    - [ ] 兼容 Wikipedia 页面不存在、重定向、消歧义等特殊情况。
-    - [ ] 输出内容保存到本地指定目录，按 wiki 分类。
-    - [ ] 优化输出格式，便于后续处理和查阅。
+    - [x] 修改/实现 get_wikipedia_page、wiki_wikipedia_operation 工具，支持 Wikipedia API。
+    - [x] 兼容 Wikipedia 页面不存在、重定向、消歧义等特殊情况。
+    - [x] 输出内容保存到本地指定目录，按 wiki 分类。
+    - [x] 优化输出格式，便于后续处理和查阅。
   - 测试要求：
-    - [ ] 创建测试脚本 test/task4.sh，抓取 Wikipedia 文章并验证内容正确。
-    - [ ] 测试抓取不存在页面、重定向、消歧义等边界情况。
-    - [ ] 验证本地保存机制和输出格式。
+    - [x] 创建测试脚本 test/task4.sh，抓取 Wikipedia 文章并验证内容正确。
+    - [x] 测试抓取不存在页面、重定向、消歧义等边界情况。
+    - [x] 验证本地保存机制和输出格式。
   - 测试步骤：
     1. 编写自动化测试脚本启动 MCP 服务器
     2. 脚本自动向服务器发送 tools/call 请求，调用 get_wikipedia_page 工具获取 Wikipedia 页面
     3. 验证返回结果正确，并且内容已保存到指定目录
     4. 在 test/task4.sh 中调用测试脚本并检查结果
   - 交付标准：
-    - [ ] 代码提交在 task4 分支。
-    - [ ] 测试脚本 test/task4.sh 可自动化验证。
-    - [ ] 通过所有回归测试。
-[ ] 任务5：本地保存机制优化（详细设计）
+    - [x] 代码提交在 task4 分支。
+    - [x] 测试脚本 test/task4.sh 可自动化验证。
+    - [x] 通过所有回归测试。
+[x] 任务5：本地保存机制优化（详细设计）
   - 目标：
-    - [ ] 按 wiki 分类保存抓取结果（如 .wikipedia_en、.wikipedia_zh 等目录）。
-    - [ ] 文件命名规范，便于查找和管理。
+    - [x] 按 wiki 分类保存抓取结果（如 .wikipedia_en、.wikipedia_zh 等目录）。
+    - [x] 文件命名规范，便于查找和管理。
+    - [x] **技术实现：使用 MediaWiki REST API 和原生 fetch API
   - 步骤：
-    - [ ] 修改本地保存逻辑，按 wiki 名称自动分目录保存。
-    - [ ] 优化文件命名规则，避免重复和冲突。
-    - [ ] 支持自定义输出目录（如通过环境变量或参数指定）。
-    - [ ] 清理和归档旧的抓取结果，避免冗余。
+    - [x] 修改本地保存逻辑，按 wiki 名称自动分目录保存。
+    - [x] 优化文件命名规则，避免重复和冲突。
+    - [x] 支持自定义输出目录（如通过环境变量或参数指定）。
+    - [x] 清理和归档旧的抓取结果，避免冗余。
+    - [x] **利用 MediaWiki REST API 提供的丰富元数据改进文件组织。
   - 测试要求：
-    - [ ] 创建测试脚本 test/task5.sh，验证不同 wiki 抓取结果能正确分类保存。
-    - [ ] 测试文件命名规范和查找便捷性。
-    - [ ] 验证自定义输出目录功能。
+    - [x] 创建测试脚本 test/task5.sh，验证不同 wiki 抓取结果能正确分类保存。
+    - [x] 测试文件命名规范和查找便捷性。
+    - [x] 验证自定义输出目录功能。
   - 测试步骤：
     1. 编写自动化测试脚本启动 MCP 服务器
     2. 脚本自动向服务器发送 tools/call 请求，调用 get_wikipedia_page 工具获取不同 wiki 的页面
     3. 验证内容已按 wiki 分类保存到正确目录
     4. 在 test/task5.sh 中调用测试脚本并检查结果
   - 交付标准：
-    - [ ] 代码提交在 task5 分支。
-    - [ ] 测试脚本 test/task5.sh 可自动化验证。
-    - [ ] 通过所有回归测试。
+    - [x] 代码提交在 task5 分支。
+    - [x] 测试脚本 test/task5.sh 可自动化验证。
+    - [x] 通过所有回归测试。
 [ ] 任务6：异常与边界处理（详细设计）
   - 目标：
     - [ ] 增加对 Wikipedia API 异常（如页面不存在、速率限制、网络错误等）的处理。
