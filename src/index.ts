@@ -16,8 +16,9 @@ import { config } from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 
-// 导入 MediaWiki 客户端
+// 导入 MediaWiki 客户端和异常处理器
 import { MediaWikiClient, WikiConfig } from './wiki-client.js';
+import ErrorHandler from './error-handler.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -157,17 +158,13 @@ async function handleWikiOperation(args: any): Promise<any> {
   const action = String(args?.action || '');
   const title = String(args?.title || '');
 
-  if (!wiki || !action || !title) {
-    throw new Error("Parameters 'wiki', 'action', and 'title' are required");
-  }
-
-  if (!wikiConfigs[wiki]) {
-    throw new Error(`Unknown wiki: ${wiki}`);
-  }
-
-  const client = new MediaWikiClient(wikiConfigs[wiki]);
-
   try {
+    // 参数验证
+    ErrorHandler.validateParameters(args, ['wiki', 'action', 'title']);
+    ErrorHandler.validateWiki(wiki, Object.keys(wikiConfigs));
+
+    const client = new MediaWikiClient(wikiConfigs[wiki]);
+
     switch (action) {
       case 'get':
         const pageContent = await client.getPage(title);
@@ -226,7 +223,19 @@ async function handleWikiOperation(args: any): Promise<any> {
 
       case 'search':
         const limit = Number(args?.limit || 10);
+        ErrorHandler.validateSearchLimit(limit);
+
         const searchResults = await client.searchPages(title, limit);
+
+        if (!searchResults.hasResults) {
+          return {
+            content: [{
+              type: "text",
+              text: `ℹ️ 未找到匹配 "${title}" 的结果\n\n💡 建议：\n- 检查拼写是否正确\n- 尝试使用更通用的关键词\n- 在 ${wiki} 中搜索相关主题`
+            }]
+          };
+        }
+
         return {
           content: [{
             type: "text",
@@ -242,12 +251,7 @@ async function handleWikiOperation(args: any): Promise<any> {
         throw new Error(`Unknown action: ${action}. Supported actions: get, search`);
     }
   } catch (error) {
-    return {
-      content: [{
-        type: "text",
-        text: `Error performing ${action} on page "${title}" from ${wiki}: ${error instanceof Error ? error.message : String(error)}`
-      }]
-    };
+    return ErrorHandler.generateErrorResponse(error, { wiki, action, title });
   }
 }
 
@@ -269,15 +273,11 @@ async function handleGetPage(args: any): Promise<any> {
 
   console.error(`[DEBUG] handleGetPage called with wiki: ${wiki}, title: ${title}`);
 
-  if (!wiki || !title) {
-    throw new Error("Both 'wiki' and 'title' parameters are required");
-  }
-
-  if (!wikiConfigs[wiki]) {
-    throw new Error(`Unknown wiki: ${wiki}`);
-  }
-
   try {
+    // 参数验证
+    ErrorHandler.validateParameters(args, ['wiki', 'title']);
+    ErrorHandler.validateWiki(wiki, Object.keys(wikiConfigs));
+
     console.error(`[DEBUG] Creating MediaWikiClient for ${wiki}`);
     const client = new MediaWikiClient(wikiConfigs[wiki]);
 
@@ -362,71 +362,82 @@ async function handleGetPage(args: any): Promise<any> {
 
     console.error(`[DEBUG] Successfully saved page to ${filepath}`);
 
+    // 生成友好的响应消息
+    let responseText = `✅ 成功获取页面 "${title}" 从 ${wiki}\n`;
+    responseText += `📁 保存到: ${filepath}\n`;
+    responseText += `📊 内容长度: ${content.length.toLocaleString()} 字符\n`;
+
+    // 添加特殊情况提示
+    if (metadata.redirect) {
+      responseText += `\n🔄 注意: 该页面已重定向到 "${metadata.redirect.redirectTo}"`;
+    }
+
+    if (metadata.isDisambiguation) {
+      responseText += `\n📚 注意: 这是一个消歧义页面，可能包含多个相关主题`;
+    }
+
+    responseText += `\n\n📂 目录统计:\n`;
+    responseText += `- 缓存文件数: ${dirStats.fileCount}\n`;
+    responseText += `- 缓存大小: ${(dirStats.totalSize / 1024 / 1024).toFixed(2)} MB\n`;
+    if (dirStats.oldestFile && dirStats.newestFile) {
+      responseText += `- 最旧文件: ${dirStats.oldestFile.toISOString()}\n`;
+      responseText += `- 最新文件: ${dirStats.newestFile.toISOString()}`;
+    }
+
     return {
       content: [{
         type: "text",
-        text: `Successfully retrieved page "${title}" from ${wiki}\nContent saved to: ${filepath}\nMetadata saved to: ${metadataFilepath}\nContent length: ${content.length} characters\n\nDirectory stats:\n- Files in cache: ${dirStats.fileCount}\n- Total cache size: ${(dirStats.totalSize / 1024 / 1024).toFixed(2)} MB\n- Oldest file: ${dirStats.oldestFile ? dirStats.oldestFile.toISOString() : 'N/A'}\n- Newest file: ${dirStats.newestFile ? dirStats.newestFile.toISOString() : 'N/A'}`
+        text: responseText
       }]
     };
   } catch (error) {
     console.error(`[DEBUG] Error in handleGetPage:`, error);
-    return {
-      content: [{
-        type: "text",
-        text: `Error retrieving page "${title}" from ${wiki}: ${error instanceof Error ? error.message : String(error)}`
-      }]
-    };
+    return ErrorHandler.generateErrorResponse(error, { wiki, title });
   }
 }
 
 async function handleSearchPages(args: any): Promise<any> {
   const wiki = String(args?.wiki || '');
   const query = String(args?.query || '');
-  const limit = Number(args?.limit || 10);
+  // 修复: 正确处理 limit=0 的情况
+  const limit = args?.limit !== undefined ? Number(args.limit) : 10;
   const namespace = Array.isArray(args?.namespace) ? args.namespace.map(Number) : [0];
 
-  if (!wiki || !query) {
-    throw new Error("Both 'wiki' and 'query' parameters are required");
-  }
-
-  if (!wikiConfigs[wiki]) {
-    throw new Error(`Unknown wiki: ${wiki}`);
-  }
-
-  if (limit <= 0 || limit > 50) {
-    throw new Error("Limit must be between 1 and 50");
-  }
-
   try {
+    // 参数验证
+    ErrorHandler.validateParameters(args, ['wiki', 'query']);
+    ErrorHandler.validateWiki(wiki, Object.keys(wikiConfigs));
+    ErrorHandler.validateSearchLimit(limit);
+
     const client = new MediaWikiClient(wikiConfigs[wiki]);
     const searchResult = await client.searchPages(query, limit, namespace);
 
-    if (searchResult.results.length === 0) {
+    if (!searchResult.hasResults) {
       return {
         content: [{
           type: "text",
-          text: `No results found for "${query}" in ${wiki} wiki.`
+          text: `ℹ️ 未在 ${wiki} 中找到匹配 "${query}" 的结果\n\n💡 建议：\n- 检查拼写是否正确\n- 尝试使用更广泛的关键词\n- 尝试使用同义词或相关词汇\n- 检查语言设置是否正确（${wiki})`
         }]
       };
     }
 
     // 格式化搜索结果输出
-    let resultText = `Found ${searchResult.total} result(s) for "${query}" in ${wiki} wiki:\n\n`;
+    let resultText = `🔍 在 ${wiki} 中找到 ${searchResult.total} 个匹配 "${query}" 的结果：\n\n`;
 
     searchResult.results.forEach((result: any, index: number) => {
       resultText += `${index + 1}. **${result.title}**\n`;
       if (result.snippet) {
         resultText += `   ${result.snippet}\n`;
       }
-      resultText += `   Score: ${result.score}, Size: ${result.size} bytes, Words: ${result.wordcount}\n`;
+      resultText += `   评分: ${result.score}, 大小: ${result.size} 字节, 字数: ${result.wordcount}\n`;
       if (result.timestamp) {
-        resultText += `   Last modified: ${new Date(result.timestamp).toLocaleString()}\n`;
+        resultText += `   最后修改: ${new Date(result.timestamp).toLocaleString()}\n`;
       }
       resultText += '\n';
     });
 
     if (searchResult.total === limit) {
-      resultText += `\nShowing first ${limit} results. Use a larger limit to see more results.`;
+      resultText += `\n📊 显示前 ${limit} 个结果。使用更大的 limit 参数可查看更多结果。`;
     }
 
     return {
@@ -437,12 +448,7 @@ async function handleSearchPages(args: any): Promise<any> {
     };
 
   } catch (error) {
-    return {
-      content: [{
-        type: "text",
-        text: `Error searching in ${wiki}: ${error instanceof Error ? error.message : String(error)}`
-      }]
-    };
+    return ErrorHandler.generateErrorResponse(error, { wiki, query, limit, namespace });
   }
 }
 
