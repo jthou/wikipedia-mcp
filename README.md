@@ -43,8 +43,8 @@ WIKIPEDIA_EN_API=https://en.wikipedia.org/w/api.php
 WIKIPEDIA_ZH_API=https://zh.wikipedia.org/w/api.php
 
 # 可选：HTTP 代理配置
-HTTP_PROXY=http://localhost:7890
-HTTPS_PROXY=http://localhost:7890
+HTTP_PROXY=http://your-proxy-host:port
+HTTPS_PROXY=http://your-proxy-host:port
 
 # 可选：输出目录配置
 WIKI_OUTPUT_DIR=/path/to/output/directory
@@ -59,42 +59,92 @@ MAX_FILE_AGE_DAYS=30
 1. **打开 MCP 设置**
    - 在 CodeBuddy 中，点击设置 → MCP 服务器
 
-2. **添加 MediaWiki MCP 服务器**
+2. **添加 Wikipedia MCP 服务器**
    ```json
    {
-     "name": "mediawiki-mcp",
+     "name": "wikipedia-mcp",
      "command": "node",
-     "args": ["/path/to/mediawiki-mcp/build/index.js"],
+     "args": ["/path/to/your/wikipedia-mcp/build/index.js"],
      "env": {}
    }
    ```
 
 3. **启用服务器**
    - 保存配置后，服务器将自动启动
-   - 在 AI 对话中即可使用 MediaWiki 功能
+   - 在 AI 对话中即可使用 Wikipedia 功能
 
 ### 在 VS Code 中使用
 
-1. **安装 MCP 扩展**
-   - 安装支持 MCP 的 AI 扩展（如 Claude、Codeium 等）
+项目提供了多种在 VS Code 中配置 Wikipedia MCP 服务器的方式：
 
-2. **配置 MCP 服务器**
-   
-   在 VS Code 设置中添加：
+#### 方式1：使用工作区配置（推荐）
+
+1. **打开工作区文件**
+   ```bash
+   # 在项目根目录打开工作区
+   code wikipedia-mcp.code-workspace
+   ```
+
+2. **确保项目已构建**
+   ```bash
+   npm run build
+   ```
+
+3. **安装 MCP 扩展**
+   - 工作区会自动推荐安装 `modelcontextprotocol.mcp` 扩展
+   - 或手动在扩展市场搜索 "MCP" 安装
+
+#### 方式2：全局用户配置
+
+1. **打开 VS Code 设置**
+   - 使用 `Ctrl/Cmd + ,` 打开设置
+   - 点击右上角 "Open Settings (JSON)" 图标
+
+2. **添加 MCP 服务器配置**
    ```json
    {
      "mcp.servers": {
-       "mediawiki-mcp": {
+       "wikipedia-mcp": {
          "command": "node",
-         "args": ["/absolute/path/to/mediawiki-mcp/build/index.js"]
+         "args": [
+           "/path/to/your/wikipedia-mcp/build/index.js"
+         ]
        }
      }
    }
    ```
 
-3. **使用功能**
-   - 重启 VS Code
-   - 在 AI 助手中使用 MediaWiki 相关命令
+#### 方式3：项目特定配置
+
+在项目 `.vscode/settings.json` 中添加：
+```json
+{
+  "mcp.servers": {
+    "wikipedia-mcp": {
+      "command": "node",
+      "args": [
+        "./build/index.js"
+      ],
+      "cwd": "${workspaceFolder}"
+    }
+  }
+}
+```
+
+#### 验证配置
+
+1. **重启 VS Code** 或重新加载窗口
+2. **检查 MCP 状态** 在状态栏或命令面板中查看 MCP 服务器状态
+3. **测试功能** 在 AI 助手对话中尝试使用以下命令：
+   - "列出可用的 Wikipedia 实例"
+   - "获取人工智能的 Wikipedia 页面"
+   - "搜索机器学习相关的中文 Wikipedia 页面"
+
+#### 故障排除
+
+- **服务器启动失败**: 确保项目已构建 (`npm run build`) 且路径正确
+- **工具不可用**: 确认 MCP 扩展已安装并启用
+- **路径问题**: 使用绝对路径或确保工作目录正确设置
 
 ### 支持的 Wikipedia 实例
 
@@ -240,12 +290,25 @@ wikipedia-mcp/
 │   └── regression.sh     # 回归测试脚本
 ├── .wikipedia_en/        # 英文 Wikipedia 内容缓存
 ├── .wikipedia_zh/        # 中文 Wikipedia 内容缓存
+├── wikipedia-mcp.code-workspace  # VS Code 工作区配置
+├── vscode-settings-example.json  # VS Code 用户设置示例
+├── VSCODE_SETUP.md       # VS Code 详细配置指南
 ├── package.json          # 项目配置
 ├── tsconfig.json         # TypeScript 配置
 ├── todo.md               # 任务列表和项目管理
 ├── .gitignore           # Git 忽略规则
 └── README.md            # 项目文档
 ```
+
+### 配置文件说明
+
+项目包含多种 VS Code MCP 配置文件：
+
+- **`wikipedia-mcp.code-workspace`** - VS Code 工作区配置文件，包含项目特定的 MCP 设置
+- **`vscode-settings-example.json`** - 用户设置示例文件，展示如何在全局设置中配置 MCP
+- **`VSCODE_SETUP.md`** - 详细的 VS Code 配置指南，包含故障排除
+
+这些文件使得在不同场景下配置 VS Code MCP 服务器变得简单快捷。
 
 ### 测试配置
 
@@ -356,8 +419,8 @@ npx @modelcontextprotocol/inspector node build/index.js
 
 ```bash
 # 设置代理环境变量
-export HTTP_PROXY=http://localhost:7890
-export HTTPS_PROXY=http://localhost:7890
+export HTTP_PROXY=http://your-proxy-host:port
+export HTTPS_PROXY=http://your-proxy-host:port
 
 # 构建和测试
 npm run build
@@ -404,7 +467,7 @@ DEBUG=mediawiki-mcp node build/index.js
 
 3. **代理连接问题**
    - 确保代理服务器正在运行
-   - 验证代理 URL 格式：`http://localhost:7890`
+   - 验证代理 URL 格式：`http://your-proxy-host:port`
    - 检查 localhost 是否需要绕过代理
    - 检查环境变量：`HTTP_PROXY`、`HTTPS_PROXY`
 

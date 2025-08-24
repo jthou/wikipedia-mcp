@@ -30,7 +30,7 @@
        "wikipedia-mcp": {
          "command": "node",
          "args": [
-           "/System/Volumes/Data/justin/dev/wikipedia-mcp/wikipedia-mcp/build/index.js"
+           "/path/to/your/wikipedia-mcp/build/index.js"
          ]
        }
      }
@@ -46,7 +46,7 @@
   "type": "stdio",
   "command": "node",
   "args": [
-    "/System/Volumes/Data/justin/dev/wikipedia-mcp/wikipedia-mcp/build/index.js"
+    "/path/to/your/wikipedia-mcp/build/index.js"
   ],
   "gallery": false
 }
@@ -78,5 +78,5 @@
    - 检查服务器配置语法
 
 3. **路径问题**
-   - 使用绝对路径：`/System/Volumes/Data/justin/dev/wikipedia-mcp/wikipedia-mcp/build/index.js`
+   - 使用绝对路径：`/path/to/your/wikipedia-mcp/build/index.js`
    - 或在工作区中使用相对路径：`./build/index.js`
