@@ -1,0 +1,25 @@
+{
+    "folders": [
+        {
+            "path": "."
+        }
+    ],
+    "settings": {
+        "mcp.servers": {
+            "wikipedia-mcp": {
+                "command": "node",
+                "args": [
+                    "./build/index.js"
+                ],
+                "env": {},
+                "cwd": "${workspaceFolder}"
+            }
+        }
+    },
+    "extensions": {
+        "recommendations": [
+            "modelcontextprotocol.mcp",
+            "ms-vscode.vscode-typescript-next"
+        ]
+    }
+}

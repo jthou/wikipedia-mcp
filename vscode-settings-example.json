@@ -1,0 +1,10 @@
+{
+  "mcp.servers": {
+    "wikipedia-mcp": {
+      "command": "node",
+      "args": [
+        "/System/Volumes/Data/justin/dev/wikipedia-mcp/wikipedia-mcp/build/index.js"
+      ]
+    }
+  }
+}
