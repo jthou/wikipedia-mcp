@@ -36,17 +36,17 @@ setTimeout(() => {
   const hasZhwiki = allOutput.includes('zhwiki');
   
   if (hasEnwiki && hasZhwiki) {
-    console.log('✅ Task 3 PASSED: list_wikis correctly shows Wikipedia instances');
+    console.log('✅ Task 3 PASSED: list_wikipedia_wikis correctly shows Wikipedia instances');
     process.exit(0);
   } else {
-    console.log('❌ Task 3 FAILED: list_wikis does not show Wikipedia instances correctly');
+    console.log('❌ Task 3 FAILED: list_wikipedia_wikis does not show Wikipedia instances correctly');
     process.exit(1);
   }
 }, 5000);
 
-// 发送list_wikis请求
+// 发送list_wikipedia_wikis请求
 setTimeout(() => {
-  const request = '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_wikis","arguments":{}}}\n';
+  const request = '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_wikipedia_wikis","arguments":{}}}\n';
   server.stdin.write(request);
 }, 1000);
 EOF
@@ -58,9 +58,9 @@ rm /tmp/task3_test.js
 
 # 检查结果
 if [ $TEST_RESULT -eq 0 ]; then
-    echo "✅ Task 3 PASSED: list_wikis correctly shows Wikipedia instances"
+    echo "✅ Task 3 PASSED: list_wikipedia_wikis correctly shows Wikipedia instances"
     exit 0
 else
-    echo "❌ Task 3 FAILED: list_wikis does not show Wikipedia instances correctly"
+    echo "❌ Task 3 FAILED: list_wikipedia_wikis does not show Wikipedia instances correctly"
     exit 1
 fi
