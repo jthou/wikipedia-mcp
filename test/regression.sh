@@ -36,6 +36,10 @@ run_test() {
 run_test "Task 1" "./test/task1.sh"
 run_test "Task 2" "./test/task2.sh"
 run_test "Task 3" "./test/task3.sh"
+run_test "Task 4" "./test/task4.sh"
+run_test "Task 5" "./test/task5.sh"
+run_test "Task 6" "./test/task6.sh"
+run_test "Task 7" "./test/task7.sh"
 
 # 总结
 echo ""

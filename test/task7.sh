@@ -5,6 +5,11 @@
 
 echo "Testing task 7: Verify documentation completeness and accuracy"
 
+# 切换到项目根目录
+if [ "$(basename "$PWD")" = "test" ]; then
+    cd ..
+fi
+
 # 设置颜色输出
 GREEN='\033[0;32m'
 RED='\033[0;31m'
@@ -77,41 +82,41 @@ echo "🔍 Checking README.md documentation..."
 echo "=========================================="
 
 # 1. 检查基本文档文件存在
-check_file_exists "../README.md" "Main documentation file"
+check_file_exists "README.md" "Main documentation file"
 
 # 2. 检查README.md标题更新
-check_content_exists "../README.md" "Wikipedia MCP Server" "Updated title (Wikipedia MCP Server)"
+check_content_exists "README.md" "Wikipedia MCP Server" "Updated title (Wikipedia MCP Server)"
 
 # 3. 检查Wikipedia功能描述
-check_multiple_patterns "../README.md" "Wikipedia feature descriptions" \
+check_multiple_patterns "README.md" "Wikipedia feature descriptions" \
     "Wikipedia 支持" \
     "英文、中文等多语言版本" \
     "本地保存" \
     "异常处理"
 
 # 4. 检查支持的Wikipedia实例列表
-check_multiple_patterns "../README.md" "Supported Wikipedia instances" \
+check_multiple_patterns "README.md" "Supported Wikipedia instances" \
     "enwiki" \
     "zhwiki" \
     "英文维基百科" \
     "中文维基百科"
 
 # 5. 检查工具列表更新
-check_multiple_patterns "../README.md" "Tool documentation" \
+check_multiple_patterns "README.md" "Tool documentation" \
     "list_wikipedia_wikis" \
     "get_wikipedia_page" \
     "wiki_wikipedia_operation" \
     "search_pages"
 
 # 6. 检查工具使用示例
-check_multiple_patterns "../README.md" "Tool usage examples" \
+check_multiple_patterns "README.md" "Tool usage examples" \
     "列出可用的 Wikipedia 实例" \
     "获取特定页面内容" \
     "搜索 Wikipedia 页面" \
     "通用 Wikipedia 操作"
 
 # 7. 检查异常处理说明
-check_multiple_patterns "../README.md" "Exception handling documentation" \
+check_multiple_patterns "README.md" "Exception handling documentation" \
     "异常处理和边界情况" \
     "页面不存在" \
     "网络错误" \
@@ -119,14 +124,14 @@ check_multiple_patterns "../README.md" "Exception handling documentation" \
     "本地保存问题"
 
 # 8. 检查测试配置更新
-check_multiple_patterns "../README.md" "Test configuration" \
+check_multiple_patterns "README.md" "Test configuration" \
     "快速功能测试" \
     "Wikipedia 页面抓取测试" \
     "中文 Wikipedia 搜索测试" \
     "自动化测试脚本"
 
 # 9. 检查项目结构更新
-check_multiple_patterns "../README.md" "Project structure" \
+check_multiple_patterns "README.md" "Project structure" \
     "wiki-client.ts" \
     "error-handler.ts" \
     "constants.ts" \
@@ -135,7 +140,7 @@ check_multiple_patterns "../README.md" "Project structure" \
     "todo.md"
 
 # 10. 检查故障排除更新
-check_multiple_patterns "../README.md" "Troubleshooting guide" \
+check_multiple_patterns "README.md" "Troubleshooting guide" \
     "list_wikipedia_wikis 工具无法使用" \
     "Wikipedia 页面获取失败" \
     "调试模式" \
@@ -147,24 +152,24 @@ echo "🔍 Checking project configuration files..."
 echo "=========================================="
 
 # 11. 检查关键项目文件存在
-check_file_exists "../package.json" "Package configuration"
-check_file_exists "../tsconfig.json" "TypeScript configuration"
-check_file_exists "../todo.md" "Project task list"
+check_file_exists "package.json" "Package configuration"
+check_file_exists "tsconfig.json" "TypeScript configuration"
+check_file_exists "todo.md" "Project task list"
 
 # 12. 检查源代码文件存在
-check_file_exists "../src/index.ts" "Main server implementation"
-check_file_exists "../src/wiki-client.ts" "Wikipedia client implementation"
-check_file_exists "../src/error-handler.ts" "Error handler module"
-check_file_exists "../src/constants.ts" "Constants definition"
+check_file_exists "src/index.ts" "Main server implementation"
+check_file_exists "src/wiki-client.ts" "Wikipedia client implementation"
+check_file_exists "src/error-handler.ts" "Error handler module"
+check_file_exists "src/constants.ts" "Constants definition"
 
 # 13. 检查测试脚本文件存在
-check_file_exists "task1.sh" "Task 1 test script"
-check_file_exists "task2.sh" "Task 2 test script"
-check_file_exists "task3.sh" "Task 3 test script"
-check_file_exists "task4.sh" "Task 4 test script"
-check_file_exists "task5.sh" "Task 5 test script"
-check_file_exists "task6.sh" "Task 6 test script"
-check_file_exists "regression.sh" "Regression test script"
+check_file_exists "test/task1.sh" "Task 1 test script"
+check_file_exists "test/task2.sh" "Task 2 test script"
+check_file_exists "test/task3.sh" "Task 3 test script"
+check_file_exists "test/task4.sh" "Task 4 test script"
+check_file_exists "test/task5.sh" "Task 5 test script"
+check_file_exists "test/task6.sh" "Task 6 test script"
+check_file_exists "test/regression.sh" "Regression test script"
 
 echo ""
 echo "=========================================="
@@ -172,9 +177,9 @@ echo "🔍 Checking documentation consistency..."
 echo "=========================================="
 
 # 14. 检查工具列表与实际实现的一致性
-if [ -f "../src/index.ts" ]; then
+if [ -f "src/index.ts" ]; then
     # 检查实际实现的工具是否在文档中提到
-    if grep -q "list_wikipedia_wikis" "../src/index.ts" && grep -q "list_wikipedia_wikis" "../README.md"; then
+    if grep -q "list_wikipedia_wikis" "src/index.ts" && grep -q "list_wikipedia_wikis" "README.md"; then
         echo -e "${GREEN}✅ list_wikipedia_wikis tool documented and implemented${NC}"
         ((TESTS_PASSED++))
     else
@@ -182,7 +187,7 @@ if [ -f "../src/index.ts" ]; then
         ((TESTS_FAILED++))
     fi
     
-    if grep -q "get_wikipedia_page" "../src/index.ts" && grep -q "get_wikipedia_page" "../README.md"; then
+    if grep -q "get_wikipedia_page" "src/index.ts" && grep -q "get_wikipedia_page" "README.md"; then
         echo -e "${GREEN}✅ get_wikipedia_page tool documented and implemented${NC}"
         ((TESTS_PASSED++))
     else
@@ -190,7 +195,7 @@ if [ -f "../src/index.ts" ]; then
         ((TESTS_FAILED++))
     fi
     
-    if grep -q "wiki_wikipedia_operation" "../src/index.ts" && grep -q "wiki_wikipedia_operation" "../README.md"; then
+    if grep -q "wiki_wikipedia_operation" "src/index.ts" && grep -q "wiki_wikipedia_operation" "README.md"; then
         echo -e "${GREEN}✅ wiki_wikipedia_operation tool documented and implemented${NC}"
         ((TESTS_PASSED++))
     else
@@ -200,8 +205,8 @@ if [ -f "../src/index.ts" ]; then
 fi
 
 # 15. 检查wiki配置与文档一致性
-if [ -f "../src/index.ts" ]; then
-    if grep -q "enwiki" "../src/index.ts" && grep -q "enwiki" "../README.md"; then
+if [ -f "src/index.ts" ]; then
+    if grep -q "enwiki" "src/index.ts" && grep -q "enwiki" "README.md"; then
         echo -e "${GREEN}✅ enwiki configuration documented and implemented${NC}"
         ((TESTS_PASSED++))
     else
@@ -209,7 +214,7 @@ if [ -f "../src/index.ts" ]; then
         ((TESTS_FAILED++))
     fi
     
-    if grep -q "zhwiki" "../src/index.ts" && grep -q "zhwiki" "../README.md"; then
+    if grep -q "zhwiki" "src/index.ts" && grep -q "zhwiki" "README.md"; then
         echo -e "${GREEN}✅ zhwiki configuration documented and implemented${NC}"
         ((TESTS_PASSED++))
     else
