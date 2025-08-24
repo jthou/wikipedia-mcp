@@ -1,0 +1,1 @@
+{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"Available MediaWiki instances (2):\n\n- enwiki: https://en.wikipedia.org/w/api.php\n- zhwiki: https://zh.wikipedia.org/w/api.php"}]}}
