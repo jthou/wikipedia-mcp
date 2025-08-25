@@ -302,6 +302,136 @@ async function handleGetPage(args: any): Promise<any> {
   }
 }
 
+/**
+ * 处理快速搜索请求 (OpenSearch API)
+ */
+async function handleQuickSearch(args: any): Promise<any> {
+  try {
+    // 参数验证
+    ErrorHandler.validateParameters(args, ['wiki', 'query']);
+
+    const wiki = String(args.wiki);
+    const query = String(args.query);
+    const limit = args?.limit !== undefined ? Number(args.limit) : 10;
+
+    // 验证wiki实例
+    ErrorHandler.validateWiki(wiki, Object.keys(wikiConfigs));
+
+    // 验证搜索限制
+    ErrorHandler.validateSearchLimit(limit);
+
+    const client = new MediaWikiClient(wikiConfigs[wiki]);
+    const searchResult = await client.openSearch(query, limit);
+
+    if (searchResult.results.length === 0) {
+      return {
+        content: [{
+          type: "text",
+          text: `No quick search results found for "${query}" in ${wiki} wiki.`
+        }]
+      };
+    }
+
+    // 格式化快速搜索结果输出
+    let resultText = `Quick Search Results for "${query}" in ${wiki} wiki (${searchResult.responseTime}ms):\n\n`;
+
+    searchResult.results.forEach((result: any, index: number) => {
+      resultText += `${index + 1}. **${result.title}**\n`;
+      if (result.description) {
+        resultText += `   ${result.description}\n`;
+      }
+      if (result.url) {
+        resultText += `   URL: ${result.url}\n`;
+      }
+      resultText += '\n';
+    });
+
+    resultText += `\nSearch Strategy: ${searchResult.strategy}\n`;
+    resultText += `Response Time: ${searchResult.responseTime}ms\n`;
+    resultText += `Total Results: ${searchResult.total}`;
+
+    return {
+      content: [{
+        type: "text",
+        text: resultText
+      }]
+    };
+  } catch (error) {
+    return ErrorHandler.generateErrorResponse(error, { tool: 'quick_search', args });
+  }
+}
+
+/**
+ * 处理智能搜索请求 (Smart Search)
+ */
+async function handleSmartSearch(args: any): Promise<any> {
+  try {
+    // 参数验证
+    ErrorHandler.validateParameters(args, ['wiki', 'query']);
+
+    const wiki = String(args.wiki);
+    const query = String(args.query);
+    const options = args?.options || {};
+    const limit = options.limit !== undefined ? Number(options.limit) : 10;
+
+    // 验证wiki实例
+    ErrorHandler.validateWiki(wiki, Object.keys(wikiConfigs));
+
+    // 验证搜索限制
+    ErrorHandler.validateSearchLimit(limit);
+
+    const client = new MediaWikiClient(wikiConfigs[wiki]);
+    const searchResult = await client.smartSearch(query, { ...options, limit });
+
+    if (searchResult.results.length === 0) {
+      return {
+        content: [{
+          type: "text",
+          text: `No smart search results found for "${query}" in ${wiki} wiki.`
+        }]
+      };
+    }
+
+    // 格式化智能搜索结果输出
+    let resultText = `Smart Search Results for "${query}" in ${wiki} wiki (${searchResult.responseTime}ms):\n\n`;
+
+    searchResult.results.forEach((result: any, index: number) => {
+      resultText += `${index + 1}. **${result.title}** [${result.source}]\n`;
+      if (result.snippet) {
+        resultText += `   ${result.snippet}\n`;
+      }
+      if (result.description) {
+        resultText += `   ${result.description}\n`;
+      }
+      resultText += `   Relevance Score: ${result.relevanceScore?.toFixed(3) || 'N/A'}\n`;
+      if (result.size) {
+        resultText += `   Size: ${result.size} bytes`;
+      }
+      if (result.wordcount) {
+        resultText += `, Words: ${result.wordcount}`;
+      }
+      resultText += '\n\n';
+    });
+
+    resultText += `Search Performance:\n`;
+    resultText += `- Total Strategies: ${searchResult.performance.totalStrategies}\n`;
+    resultText += `- Successful Strategies: ${searchResult.performance.successfulStrategies}\n`;
+    resultText += `- Strategies Used: ${searchResult.strategies.join(', ')}\n`;
+    resultText += `- Total Response Time: ${searchResult.responseTime}ms\n`;
+    resultText += `- Average Strategy Time: ${searchResult.performance.averageResponseTime.toFixed(2)}ms\n`;
+    resultText += `- Total Results: ${searchResult.total}`;
+
+    return {
+      content: [{
+        type: "text",
+        text: resultText
+      }]
+    };
+  } catch (error) {
+    return ErrorHandler.generateErrorResponse(error, { tool: 'smart_search', args });
+  }
+}
+
 // 创建 MCP 服务器实例
 const server = new Server(
   { name: "mediawiki-mcp", version: "0.1.0" },
@@ -413,13 +543,86 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           },
           required: ["wiki", "query"]
         }
+      },
+      {
+        name: "quick_search",
+        description: "Fast OpenSearch API for quick suggestions (optimized for speed <500ms)",
+        inputSchema: {
+          type: "object",
+          properties: {
+            wiki: {
+              type: "string",
+              description: "Wiki instance name",
+              enum: ["enwiki", "zhwiki"]
+            },
+            query: {
+              type: "string",
+              description: "Search query for quick suggestions"
+            },
+            limit: {
+              type: "number",
+              description: "Maximum number of suggestions to return",
+              default: 10,
+              minimum: 1,
+              maximum: 50
+            }
+          },
+          required: ["wiki", "query"]
+        }
+      },
+      {
+        name: "smart_search",
+        description: "Intelligent multi-strategy search with parallel execution and result aggregation",
+        inputSchema: {
+          type: "object",
+          properties: {
+            wiki: {
+              type: "string",
+              description: "Wiki instance name",
+              enum: ["enwiki", "zhwiki"]
+            },
+            query: {
+              type: "string",
+              description: "Search query for comprehensive search"
+            },
+            options: {
+              type: "object",
+              description: "Search configuration options",
+              properties: {
+                limit: {
+                  type: "number",
+                  description: "Maximum number of results to return",
+                  default: 10,
+                  minimum: 1,
+                  maximum: 50
+                },
+                includeFulltext: {
+                  type: "boolean",
+                  description: "Include full-text search results",
+                  default: true
+                },
+                includePrefix: {
+                  type: "boolean",
+                  description: "Include prefix search results",
+                  default: true
+                },
+                includeOpenSearch: {
+                  type: "boolean",
+                  description: "Include OpenSearch suggestions",
+                  default: true
+                }
+              }
+            }
+          },
+          required: ["wiki", "query"]
+        }
       }
       // ...existing code...
     ]
   };
 });
 
-// 工具调用处理：处理 list_wikipedia_wikis, wiki_wikipedia_operation, get_wikipedia_page 和 search_pages
+// 工具调用处理：处理 list_wikipedia_wikis, wiki_wikipedia_operation, get_wikipedia_page, search_pages, quick_search 和 smart_search
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const toolName = request.params.name;
 
@@ -429,12 +632,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     case "wiki_wikipedia_operation":
       return await handleWikiOperation(request.params.arguments);
+
     case "get_wikipedia_page":
       // 直接调用 handleGetPage 以支持元数据保存
       return await handleGetPage(request.params.arguments);
 
     case "search_pages":
       return await handleSearchPages(request.params.arguments);
+
+    case "quick_search":
+      return await handleQuickSearch(request.params.arguments);
+
+    case "smart_search":
+      return await handleSmartSearch(request.params.arguments);
 
     default:
       throw new Error(`Unknown tool: ${toolName}`);

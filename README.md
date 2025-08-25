@@ -7,10 +7,13 @@
 - **🌍 Wikipedia 支持**: 专门支持 Wikipedia 内容抓取（英文、中文等多语言版本）
 - **📋 实例列表**: 查看所有可用的 Wikipedia 实例
 - **🔍 页面搜索**: 使用关键词搜索 Wikipedia 页面
+- **⚡ 快速搜索**: 优化的快速建议搜索（<2秒响应）
+- **🧠 智能搜索**: 多策略并行执行 + 结果聚合的综合搜索
 - **📄 获取页面内容**: 检索特定页面的完整内容和元数据
 - **💾 本地保存**: 按 wiki 分类自动保存抓取结果到本地目录
 - **🛡️ 异常处理**: 完善的错误处理和友好提示
 - **🌐 代理支持**: 可配置 HTTP/HTTPS 代理支持
+- **📊 性能优化**: 内存缓存机制和智能策略选择
 
 ---
 
@@ -165,6 +168,8 @@ MAX_FILE_AGE_DAYS=30
 | `get_wikipedia_page` | 获取 Wikipedia 页面内容 | `wiki`(必需), `title`(必需) | 支持元数据和本地保存 |
 | `wiki_wikipedia_operation` | 执行 Wikipedia 操作 | `wiki`(必需), `action`(必需), `title`(必需), `limit`(可选) | 支持 get/search 操作 |
 | `search_pages` | 搜索 Wikipedia 页面 | `wiki`(必需), `query`(必需), `limit`(可选) | 高级搜索功能 |
+| `quick_search` | 快速搜索建议 | `wiki`(必需), `query`(必需), `limit`(可选) | 优化速度 < 2秒，适合实时建议 |
+| `smart_search` | 智能综合搜索 | `wiki`(必需), `query`(必需), `options`(可选) | 多策略并行+结果聚合，最全面的搜索结果 |
 
 ### 使用示例
 
@@ -198,6 +203,40 @@ MAX_FILE_AGE_DAYS=30
 - limit: 5
 
 结果：返回排名前5的相关页面，包含摘要和评分
+```
+
+#### 4. 快速搜索建议（优化速度）
+```
+工具：quick_search
+参数：
+- wiki: "enwiki"
+- query: "machine"
+- limit: 8
+
+结果：
+- 响应时间 < 2秒
+- 返回相关建议列表，包含标题、描述、URL
+- 适合实时搜索建议场景
+```
+
+#### 5. 智能综合搜索（最全面结果）
+```
+工具：smart_search
+参数：
+- wiki: "enwiki"
+- query: "deep learning"
+- options: {
+    limit: 15,
+    includeFulltext: true,
+    includePrefix: true,
+    includeOpenSearch: true
+  }
+
+结果：
+- 多策略并行执行：OpenSearch + PrefixSearch + FulltextSearch
+- 结果聚合去重，按相关性排序
+- 包含性能指标和策略统计信息
+- 适合需要最全面搜索结果的场景
 ```
 
 #### 4. 通用 Wikipedia 操作
