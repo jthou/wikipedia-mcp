@@ -130,7 +130,7 @@
     - [x] 通过所有回归测试。
 [x] 任务5：本地保存机制优化（详细设计）
   - 目标：
-    - [x] 按 wiki 分类保存抓取结果（如 .wikipedia_en、.wikipedia_zh 等目录）。
+    - [x] 按 wiki 分类保存抓取结果（如 ~/knowledge/.wikipedia_en、~/knowledge/.wikipedia_zh 等目录）。
     - [x] 文件命名规范，便于查找和管理。
     - [x] **技术实现：使用 MediaWiki REST API 和原生 fetch API
   - 步骤：

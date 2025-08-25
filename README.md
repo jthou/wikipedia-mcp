@@ -50,7 +50,7 @@ HTTP_PROXY=http://your-proxy-host:port
 HTTPS_PROXY=http://your-proxy-host:port
 
 # 可选：输出目录配置
-WIKI_OUTPUT_DIR=/path/to/output/directory
+WIKI_OUTPUT_DIR=~/knowledge
 
 # 可选：缓存管理配置
 MAX_CACHED_FILES=100
@@ -164,16 +164,54 @@ TEST_TIMEOUT=15000
 
 未来可以通过扩展 `wikiConfigs` 配置添加更多语言版本。
 
-### 可用工具
+### MCP 工具集详细介绍
 
-| 工具名称 | 功能 | 参数 | 说明 |
-|---------|------|------|--------|
-| `list_wikipedia_wikis` | 列出所有可用 Wikipedia 实例 | 无 | 查看支持的 wiki 列表 |
-| `get_wikipedia_page` | 获取 Wikipedia 页面内容 | `wiki`(必需), `title`(必需) | 支持元数据和本地保存 |
-| `wiki_wikipedia_operation` | 执行 Wikipedia 操作 | `wiki`(必需), `action`(必需), `title`(必需), `limit`(可选) | 支持 get/search 操作 |
-| `search_pages` | 搜索 Wikipedia 页面 | `wiki`(必需), `query`(必需), `limit`(可选) | 高级搜索功能 |
-| `quick_search` | 快速搜索建议 | `wiki`(必需), `query`(必需), `limit`(可选) | 优化速度 < 2秒，适合实时建议 |
-| `smart_search` | 智能综合搜索 | `wiki`(必需), `query`(必需), `options`(可选) | 多策略并行+结果聚合，最全面的搜索结果 |
+本项目提供了一套完整的 Model Context Protocol (MCP) 工具集，专门用于访问和操作 Wikipedia 内容。所有工具都经过优化，支持多语言 Wikipedia 实例，并具有完善的错误处理机制。
+
+#### 核心工具
+
+1. **list_wikipedia_wikis** - 列出所有可用的 Wikipedia 实例
+   - 无需参数，返回配置的 Wikipedia 实例列表
+   - 支持动态扩展更多语言版本
+
+2. **get_wikipedia_page** - 获取 Wikipedia 页面内容
+   - 支持多语言 Wikipedia 实例
+   - 自动保存内容和元数据到本地文件系统
+   - 默认保存位置：用户主目录下的 knowledge 文件夹
+   - 支持自定义输出目录（通过 WIKI_OUTPUT_DIR 环境变量）
+
+3. **search_pages** - 搜索 Wikipedia 页面
+   - 支持全文搜索和结果排序
+   - 可自定义返回结果数量
+   - 提供相关性评分和摘要信息
+
+#### 搜索优化工具
+
+4. **quick_search** - 快速搜索建议
+   - 基于 OpenSearch API 实现
+   - 响应时间优化至 < 2秒
+   - 适用于实时搜索建议场景
+
+5. **smart_search** - 智能综合搜索
+   - 多策略并行执行（OpenSearch + PrefixSearch + FulltextSearch）
+   - 结果聚合去重和相关性排序
+   - 提供详细的性能指标和策略统计
+
+#### 诊断工具
+
+6. **network_diagnostic** - 网络连接诊断
+   - 分层诊断：环境层、网络层、HTTP层、API层
+   - 支持多种诊断级别（基础/标准/深度）
+   - 提供智能问题分析和解决建议
+   - 适用于网络连接问题排查
+
+#### 通用操作工具
+
+7. **wiki_wikipedia_operation** - 通用 Wikipedia 操作
+   - 支持多种操作：get（获取页面）、search（搜索页面）
+   - 可扩展支持更多操作类型
+
+
 
 ### 使用示例
 
@@ -193,8 +231,8 @@ TEST_TIMEOUT=15000
 - title: "Artificial intelligence"
 
 结果：
-- 页面内容保存到 .wikipedia_en/Artificial_intelligence.txt
-- 元数据保存到 .wikipedia_en/.metadata/Artificial_intelligence.json
+- 页面内容保存到 ~/knowledge/.wikipedia_en/Artificial_intelligence.txt
+- 元数据保存到 ~/knowledge/.wikipedia_en/.metadata/Artificial_intelligence.json
 - 返回详细信息和统计数据
 ```
 
@@ -243,7 +281,22 @@ TEST_TIMEOUT=15000
 - 适合需要最全面搜索结果的场景
 ```
 
-#### 4. 通用 Wikipedia 操作
+#### 6. 网络连接诊断
+```
+工具：network_diagnostic
+参数：
+- target: "auto"     # 诊断目标：auto/wikipedia/enwiki/zhwiki/custom
+- level: "standard"  # 诊断级别：basic/standard/deep
+- timeout: 10000     # 超时时间（毫秒）
+
+结果：
+- 分层诊断报告：环境层、网络层、HTTP层、API层
+- 详细性能指标和响应时间
+- 智能问题分析和解决建议
+- 适合网络连接问题排查
+```
+
+#### 7. 通用 Wikipedia 操作
 ```
 工具：wiki_wikipedia_operation
 获取页面：
@@ -262,14 +315,35 @@ TEST_TIMEOUT=15000
 
 项目自动按 wiki 实例分类保存抓取的内容：
 
-- **英文 Wikipedia**: `.wikipedia_en/` 目录
-- **中文 Wikipedia**: `.wikipedia_zh/` 目录
-- **元数据**: `.wikipedia_xx/.metadata/` 目录
+- **英文 Wikipedia**: `~/knowledge/.wikipedia_en/` 目录
+- **中文 Wikipedia**: `~/knowledge/.wikipedia_zh/` 目录
+- **元数据**: `~/knowledge/.wikipedia_xx/.metadata/` 目录
 
 每个文件包含：
 - 页面内容（.txt 文件）
 - 详细元数据（.json 文件）
 - 自动清理旧文件（保留最近100个文件，30天内）
+
+### 自定义输出目录
+
+用户可以通过设置 `WIKI_OUTPUT_DIR` 环境变量来自定义输出目录：
+
+```bash
+# Linux/macOS
+export WIKI_OUTPUT_DIR=/path/to/custom/directory
+npm start
+
+# Windows
+set WIKI_OUTPUT_DIR=C:\path\to\custom\directory
+npm start
+
+# 或者直接在命令行中设置
+WIKI_OUTPUT_DIR=/path/to/custom/directory node build/index.js
+```
+
+当设置了 `WIKI_OUTPUT_DIR` 环境变量时，文件将保存在：
+- **英文 Wikipedia**: `/path/to/custom/directory/.wikipedia_en/` 目录
+- **中文 Wikipedia**: `/path/to/custom/directory/.wikipedia_zh/` 目录
 
 ### 异常处理和边界情况
 
@@ -331,8 +405,6 @@ wikipedia-mcp/
 │   ├── task5.sh          # 任务5测试脚本
 │   ├── task6.sh          # 任务6测试脚本
 │   └── regression.sh     # 回归测试脚本
-├── .wikipedia_en/        # 英文 Wikipedia 内容缓存
-├── .wikipedia_zh/        # 中文 Wikipedia 内容缓存
 ├── wikipedia-mcp.code-workspace  # VS Code 工作区配置
 ├── vscode-settings-example.json  # VS Code 用户设置示例
 ├── VSCODE_SETUP.md       # VS Code 详细配置指南
@@ -341,6 +413,10 @@ wikipedia-mcp/
 ├── todo.md               # 任务列表和项目管理
 ├── .gitignore           # Git 忽略规则
 └── README.md            # 项目文档
+
+注意：默认情况下，Wikipedia内容将保存在用户主目录下的knowledge文件夹中：
+├── ~/knowledge/.wikipedia_en/        # 英文 Wikipedia 内容缓存
+└── ~/knowledge/.wikipedia_zh/        # 中文 Wikipedia 内容缓存
 ```
 
 ### 配置文件说明
@@ -357,7 +433,7 @@ wikipedia-mcp/
 
 #### 1. 快速功能测试
 
-```bash
+```
 # 测试服务器基本功能（列出 Wikipedia 实例）
 node -e "
 const { spawn } = require('child_process');
@@ -379,7 +455,7 @@ server.stdout.on('data', (data) => {
 
 #### 2. Wikipedia 页面抓取测试
 
-```bash
+```
 # 测试英文 Wikipedia 页面读取
 node -e "
 const { spawn } = require('child_process');
@@ -399,7 +475,7 @@ server.stdout.on('data', (data) => {
   const response = JSON.parse(data.toString());
   if (response.result) {
     console.log('✅ 成功获取页面内容');
-    console.log('页面保存在 .wikipedia_en/ 目录');
+    console.log('页面保存在 ~/knowledge/.wikipedia_en/ 目录');
   }
   server.kill();
 });
@@ -408,7 +484,7 @@ server.stdout.on('data', (data) => {
 
 #### 3. 中文 Wikipedia 搜索测试
 
-```bash
+```
 # 测试中文维基百科搜索
 node -e "
 const { spawn } = require('child_process');
@@ -437,7 +513,7 @@ server.stdout.on('data', (data) => {
 
 #### 4. 自动化测试脚本
 
-```bash
+```
 # 运行单个任务测试
 cd test
 ./task1.sh  # 测试 list_wikipedia_wikis 工具
@@ -451,7 +527,7 @@ cd test
 
 #### 5. MCP Inspector 调试
 
-```bash
+```
 # 启动 MCP Inspector（用于深入调试）
 npx @modelcontextprotocol/inspector node build/index.js
 ```
@@ -534,7 +610,7 @@ DEBUG=mediawiki-mcp node build/index.js
 
 启用详细日志：
 
-```bash
+```
 # 在 Linux/macOS 上
 DEBUG=mediawiki-mcp node build/index.js
 

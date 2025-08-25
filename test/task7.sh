@@ -135,8 +135,6 @@ check_multiple_patterns "README.md" "Project structure" \
     "wiki-client.ts" \
     "error-handler.ts" \
     "constants.ts" \
-    ".wikipedia_en" \
-    ".wikipedia_zh" \
     "todo.md"
 
 # 10. 检查故障排除更新

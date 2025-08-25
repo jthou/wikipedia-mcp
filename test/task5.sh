@@ -46,13 +46,13 @@ function cleanupTestDirs() {
 // 测试不同场景的保存机制
 const testScenarios = [
     {
-        name: '默认目录按wiki分类保存测试',
+        name: '默认输出目录测试',
         envFile: null,
         pages: [
-            { wiki: 'enwiki', title: 'Wikipedia' },
-            { wiki: 'zhwiki', title: '维基百科' }
+            { wiki: 'enwiki', title: 'Artificial intelligence' },
+            { wiki: 'zhwiki', title: '人工智能' }
         ],
-        expectedDirs: ['.wikipedia_en', '.wikipedia_zh'],
+        expectedDirs: ['~/knowledge/.wikipedia_en', '~/knowledge/.wikipedia_zh'],
         description: '验证默认情况下按wiki分类保存到正确目录'
     },
     {

@@ -22,6 +22,7 @@ import { dirname } from 'path';
 import https from 'https';
 import http from 'http';
 import { URL } from 'url';
+import os from 'os';
 
 // 导入 MediaWiki 客户端和异常处理器
 import { MediaWikiClient, WikiConfig } from './wiki-client.js';
@@ -34,10 +35,52 @@ const __dirname = dirname(__filename);
 const args = process.argv.slice(2);
 let envFilePath = path.resolve(__dirname, '../.env'); // 默认路径
 
+// 处理命令行参数
 for (let i = 0; i < args.length; i++) {
-  if (args[i] === '-f' && i + 1 < args.length) {
+  const arg = args[i];
+
+  if (arg === '--help' || arg === '-h') {
+    console.log(`
+🔬 MediaWiki MCP Server
+
+用法: node build/index.js [选项]
+
+选项:
+  -f FILE           指定环境变量文件路径 [默认: .env]
+  --help, -h        显示帮助信息
+
+功能:
+  🔧 通过MCP协议提供Wikipedia访问接口
+  📖 支持页面搜索、获取、编辑等操作
+  🌐 支持英文和中文Wikipedia
+  🔍 提供快速搜索和智能搜索功能
+  🩺 内置网络诊断工具
+
+可用工具:
+  - list_wikipedia_wikis      列出可用的Wiki实例
+  - get_wikipedia_page        获取Wikipedia页面内容
+  - search_pages              搜索Wikipedia页面
+  - quick_search              快速搜索建议
+  - smart_search              智能多策略搜索
+  - network_diagnostic        网络连接诊断
+
+环境变量:
+  HTTP_PROXY                  HTTP代理地址
+  HTTPS_PROXY                 HTTPS代理地址
+  WIKIPEDIA_EN_API            英文Wikipedia API地址
+  WIKIPEDIA_ZH_API            中文Wikipedia API地址
+  WIKI_OUTPUT_DIR             输出目录
+
+示例:
+  node build/index.js                    # 启动MCP服务器
+  node build/index.js -f custom.env      # 使用自定义环境变量文件
+`);
+    process.exit(0);
+  }
+
+  if (arg === '-f' && i + 1 < args.length) {
     envFilePath = path.resolve(args[i + 1]);
-    break;
+    i++; // 跳过下一个参数，因为它是文件路径
   }
 }
 
@@ -92,8 +135,8 @@ async function handleWikiOperation(args: any): Promise<any> {
       case 'get':
         const pageContent = await client.getPage(title);
 
-        // 获取输出目录：优先使用环境变量，然后使用当前工作目录
-        const outputBaseDir = process.env.WIKI_OUTPUT_DIR || process.cwd();
+        // 获取输出目录：优先使用环境变量，然后使用用户主目录下的knowledge文件夹，最后使用当前工作目录
+        const outputBaseDir = process.env.WIKI_OUTPUT_DIR || path.join(os.homedir(), 'knowledge') || process.cwd();
 
         // 按wiki分类保存：enwiki -> .wikipedia_en, zhwiki -> .wikipedia_zh
         let wikiDirName;
@@ -110,21 +153,38 @@ async function handleWikiOperation(args: any): Promise<any> {
         }
 
         const wikiDir = path.join(outputBaseDir, wikiDirName);
+        const metadataDir = path.join(wikiDir, '.metadata');
 
+        // 创建目录
         if (!fs.existsSync(wikiDir)) {
           fs.mkdirSync(wikiDir, { recursive: true });
+        }
+        if (!fs.existsSync(metadataDir)) {
+          fs.mkdirSync(metadataDir, { recursive: true });
         }
 
         // 优化文件命名：清理标题中的特殊字符
         const sanitizedTitle = title.replace(/[<>:"/\\|?*]/g, '_').replace(/\s+/g, '_');
         const filename = `${sanitizedTitle}.txt`;
         const filepath = path.join(wikiDir, filename);
+
+        // 写入页面内容到文件
         fs.writeFileSync(filepath, pageContent, 'utf8');
+
+        // 写入元数据文件
+        const metadataFilename = `${sanitizedTitle}.json`;
+        const metadataFilepath = path.join(metadataDir, metadataFilename);
+        const metadata = {
+          title: title,
+          retrieved_at: new Date().toISOString(),
+          content_length: pageContent.length
+        };
+        fs.writeFileSync(metadataFilepath, JSON.stringify(metadata, null, 2), 'utf8');
 
         return {
           content: [{
             type: "text",
-            text: `Successfully retrieved page "${title}" from ${wiki}\nSaved to: ${filepath}\nContent length: ${pageContent.length} characters`
+            text: `Successfully retrieved page "${title}" from ${wiki}\nContent saved to: ${filepath}\nMetadata saved to: ${metadataFilepath}\nContent length: ${pageContent.length} characters`
           }]
         };
 
@@ -172,22 +232,35 @@ async function handleGetPage(args: any): Promise<any> {
 
     const wiki = String(args.wiki);
     const title = String(args.title);
+    // 新增参数：是否保存到文件
+    const saveToFile = args.save_to_file !== undefined ? Boolean(args.save_to_file) : true;
 
-    console.error(`[DEBUG] handleGetPage called with wiki: ${wiki}, title: ${title}`);
+    console.debug(`[DEBUG] handleGetPage called with wiki: ${wiki}, title: ${title}`);
 
     // 验证wiki实例
     ErrorHandler.validateWiki(wiki, Object.keys(wikiConfigs));
 
-    console.error(`[DEBUG] Creating MediaWikiClient for ${wiki}`);
+    console.debug(`[DEBUG] Creating MediaWikiClient for ${wiki}`);
     const client = new MediaWikiClient(wikiConfigs[wiki]);
 
-    console.error(`[DEBUG] Calling getPageWithMetadata for title: ${title}`);
+    console.debug(`[DEBUG] Calling getPageWithMetadata for title: ${title}`);
     const { content, metadata } = await client.getPageWithMetadata(title);
 
-    console.error(`[DEBUG] Got content, length: ${content.length}`);
+    console.debug(`[DEBUG] Got content, length: ${content.length}`);
 
-    // 获取输出目录：优先使用环境变量，然后使用当前工作目录
-    const outputBaseDir = process.env.WIKI_OUTPUT_DIR || process.cwd();
+    // 如果不需要保存到文件，直接返回内容
+    if (!saveToFile) {
+      return {
+        content: [{
+          type: "text",
+          text: content
+        }]
+      };
+    }
+
+    // 获取输出目录：优先使用环境变量，然后使用用户主目录下的knowledge文件夹，最后使用当前工作目录
+    const outputBaseDir = process.env.WIKI_OUTPUT_DIR || path.join(os.homedir(), 'knowledge') || process.cwd();
+    console.debug(`[DEBUG] outputBaseDir: ${outputBaseDir}`);
 
     // 按wiki分类保存：enwiki -> .wikipedia_en, zhwiki -> .wikipedia_zh
     let wikiDirName;
@@ -206,11 +279,16 @@ async function handleGetPage(args: any): Promise<any> {
     const wikiDir = path.join(outputBaseDir, wikiDirName);
     const metadataDir = path.join(wikiDir, '.metadata');
 
+    console.debug(`[DEBUG] wikiDir: ${wikiDir}`);
+    console.debug(`[DEBUG] metadataDir: ${metadataDir}`);
+
     // 创建目录
     if (!fs.existsSync(wikiDir)) {
+      console.debug(`[DEBUG] Creating wikiDir: ${wikiDir}`);
       fs.mkdirSync(wikiDir, { recursive: true });
     }
     if (!fs.existsSync(metadataDir)) {
+      console.debug(`[DEBUG] Creating metadataDir: ${metadataDir}`);
       fs.mkdirSync(metadataDir, { recursive: true });
     }
 
@@ -235,7 +313,7 @@ async function handleGetPage(args: any): Promise<any> {
     };
     fs.writeFileSync(metadataFilepath, JSON.stringify(enhancedMetadata, null, 2), 'utf8');
 
-    console.error(`[DEBUG] Successfully saved page to ${filepath}`);
+    console.debug(`[DEBUG] Successfully saved page to ${filepath}`);
 
     return {
       content: [{
@@ -244,7 +322,7 @@ async function handleGetPage(args: any): Promise<any> {
       }]
     };
   } catch (error) {
-    console.error(`[DEBUG] Error in handleGetPage:`, error);
+    console.debug(`[DEBUG] Error in handleGetPage:`, error);
     return ErrorHandler.generateErrorResponse(error, { tool: 'get_wikipedia_page', args });
   }
 } async function handleSearchPages(args: any): Promise<any> {

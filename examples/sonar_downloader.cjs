@@ -93,9 +93,8 @@ class SonarDownloader {
     this.options = {
       profile: options.profile || 'full',
       max: options.max || 25,
-      output: options.output || '.wikipedia_en',
       verbose: options.verbose || false,
-      language: options.language || 'en', // 新增语言配置
+      language: options.language || 'en',
       ...options
     };
     
@@ -202,12 +201,13 @@ class SonarDownloader {
       // 设置wiki语言
       const wiki = this.options.language === 'zh' ? 'zhwiki' : 'enwiki';
       
+      // 使用MCP服务器的get_wikipedia_page工具下载文章
+      // 让工具自己处理文件保存，不再干预其内部逻辑
       const downloadRequest = this.createJsonRpcRequest('tools/call', {
         name: 'get_wikipedia_page',
         arguments: {
           wiki: wiki,
-          title: title,
-          save_to_file: false // 我们自己处理文件保存
+          title: title
         }
       });
 
@@ -220,14 +220,9 @@ class SonarDownloader {
         return false;
       }
       
-      // 修复：正确处理MCP服务器返回的页面内容
+      // 检查响应内容
       if (response.result && response.result.content && response.result.content.length > 0) {
-        // 直接获取页面内容
-        let content = '';
-        let isErrorMessage = false;
-        let errorMessage = '';
-        
-        // 遍历返回的内容，找到真正的页面内容
+        // 遍历返回的内容
         for (const item of response.result.content) {
           if (item.type === 'text' && item.text) {
             // 检查是否是错误消息
@@ -238,136 +233,46 @@ class SonarDownloader {
                 item.text.includes('抱歉，找不到您请求的页面') ||
                 item.text.includes('Connection reset') ||
                 item.text.includes('DNS resolution failed')) {
-              isErrorMessage = true;
               // 提取更友好的错误消息
+              let errorMessage = item.text;
               if (item.text.includes('Page does not exist') || item.text.includes('找不到您请求的页面')) {
                 errorMessage = '页面不存在';
               } else if (item.text.includes('网络连接出现问题') || item.text.includes('Connection reset') || item.text.includes('DNS resolution failed')) {
                 errorMessage = '网络连接问题';
-              } else {
-                errorMessage = item.text;
               }
-              break;
-            }
-            // 检查是否是真正的页面内容
-            else if (!item.text.includes('Successfully retrieved page') && 
-                     !item.text.includes('Content saved to') &&
-                     !item.text.includes('does not exist')) {
-              content = item.text;
-            }
-          }
-        }
-        
-        // 如果是错误消息，直接处理错误
-        if (isErrorMessage) {
-          this.log(`   ❌ ${title} - ${errorMessage}`);
-          this.results.failed.push({ title, error: errorMessage });
-          return false;
-        }
-        
-        // 检查是否有有效内容
-        if (content && content.trim().length > 50) { // 至少要有50个字符才认为是有效内容
-          // 检查是否是简单重定向页面
-          const isSimpleRedirect = content.trim().startsWith('#重定向') || content.trim().startsWith('#REDIRECT');
-          
-          if (isSimpleRedirect) {
-            // 尝试提取重定向目标
-            const redirectMatch = content.match(/\[\[([^\]]+)\]\]/);
-            if (redirectMatch) {
-              const redirectTarget = redirectMatch[1];
-              this.log(`   🔄 跟随重定向: ${title} → ${redirectTarget}`);
-              return await this.downloadArticle(redirectTarget);
-            }
-            // 如果是重定向但没有找到目标，视为失败
-            this.log(`   ❌ ${title} - 重定向页面无目标`);
-            this.results.failed.push({ title, error: 'Redirect page with no target' });
-            return false;
-          }
-          
-          // 保存文件
-          const sanitizedTitle = title.replace(/[<>:"/\\|?*]/g, '_').replace(/\s+/g, '_');
-          const filename = `${sanitizedTitle}.txt`;
-          const filepath = path.join(this.options.output, filename);
-          
-          // 确保输出目录存在
-          if (!fs.existsSync(this.options.output)) {
-            fs.mkdirSync(this.options.output, { recursive: true });
-          }
-          
-          fs.writeFileSync(filepath, content, 'utf8');
-          
-          this.log(`   ✅ ${title} (${Math.round(content.length / 1024)}KB)`);
-          this.results.success.push({ 
-            title: title,
-            filename, 
-            size: content.length,
-            timestamp: new Date().toISOString() 
-          });
-          return true;
-        } else if (content && content.trim().length > 0) {
-          // 检查是否是MCP的响应消息，尝试从文件中读取内容
-          for (const item of response.result.content) {
-            if (item.type === 'text' && item.text) {
-              const match = item.text.match(/Content saved to: (.+)/);
-              if (match) {
-                const filePath = match[1];
-                if (fs.existsSync(filePath)) {
-                  content = fs.readFileSync(filePath, 'utf8');
-                  break;
-                }
-              }
-            }
-          }
-          
-          // 如果成功读取到内容，保存它
-          if (content && content.trim().length > 50) {
-            // 检查是否是简单重定向页面
-            const isSimpleRedirect = content.trim().startsWith('#重定向') || content.trim().startsWith('#REDIRECT');
-            
-            if (isSimpleRedirect) {
-              // 尝试提取重定向目标
-              const redirectMatch = content.match(/\[\[([^\]]+)\]\]/);
-              if (redirectMatch) {
-                const redirectTarget = redirectMatch[1];
-                this.log(`   🔄 跟随重定向: ${title} → ${redirectTarget}`);
-                return await this.downloadArticle(redirectTarget);
-              }
-              // 如果是重定向但没有找到目标，视为失败
-              this.log(`   ❌ ${title} - 重定向页面无目标`);
-              this.results.failed.push({ title, error: 'Redirect page with no target' });
+              
+              this.log(`   ❌ ${title} - ${errorMessage}`);
+              this.results.failed.push({ title, error: errorMessage });
               return false;
             }
-            
-            // 保存文件
-            const sanitizedTitle = title.replace(/[<>:"/\\|?*]/g, '_').replace(/\s+/g, '_');
-            const filename = `${sanitizedTitle}.txt`;
-            const filepath = path.join(this.options.output, filename);
-            
-            // 确保输出目录存在
-            if (!fs.existsSync(this.options.output)) {
-              fs.mkdirSync(this.options.output, { recursive: true });
+            // 检查是否是成功消息
+            else if (item.text.includes('Successfully retrieved page')) {
+              // 提取文件信息
+              const contentPathMatch = item.text.match(/Content saved to: (.+)/);
+              const contentLengthMatch = item.text.match(/Content length: (\d+) characters/);
+              
+              const contentPath = contentPathMatch ? contentPathMatch[1] : null;
+              const contentLength = contentLengthMatch ? parseInt(contentLengthMatch[1]) : 0;
+              
+              // 获取文件名
+              const filename = contentPath ? path.basename(contentPath) : `${title.replace(/[<>:"/\\|?*]/g, '_').replace(/\s+/g, '_')}.txt`;
+              
+              this.log(`   ✅ ${title} (${Math.round(contentLength / 1024)}KB)`);
+              this.results.success.push({ 
+                title: title,
+                filename: filename, 
+                size: contentLength,
+                timestamp: new Date().toISOString() 
+              });
+              return true;
             }
-            
-            fs.writeFileSync(filepath, content, 'utf8');
-            
-            this.log(`   ✅ ${title} (${Math.round(content.length / 1024)}KB)`);
-            this.results.success.push({ 
-              title: title,
-              filename, 
-              size: content.length,
-              timestamp: new Date().toISOString() 
-            });
-            return true;
-          } else {
-            this.log(`   ❌ ${title} - 无有效内容`);
-            this.results.failed.push({ title, error: 'No valid content found' });
-            return false;
           }
-        } else {
-          this.log(`   ❌ ${title} - 无有效内容`);
-          this.results.failed.push({ title, error: 'No valid content found' });
-          return false;
         }
+        
+        // 如果没有找到明确的成功或错误消息
+        this.log(`   ❌ ${title} - 未知响应格式`);
+        this.results.failed.push({ title, error: 'Unknown response format' });
+        return false;
       }
       
       this.log(`   ❌ ${title} - 无内容`);
@@ -406,11 +311,6 @@ class SonarDownloader {
       await this.sendRequest(initRequest);
       this.log('✅ MCP服务器初始化成功\n', 'verbose');
       
-      // 创建输出目录
-      if (!fs.existsSync(this.options.output)) {
-        fs.mkdirSync(this.options.output, { recursive: true });
-      }
-      
       // 获取配置
       const profile = SONAR_CONFIG.profiles[this.options.profile] || SONAR_CONFIG.profiles.full;
       const targetDomains = profile.domains;
@@ -421,10 +321,48 @@ class SonarDownloader {
       this.log(`📋 研究档案: ${profile.name}`);
       this.log(`📈 最大文章数: ${maxArticles}`);
       this.log(`🎯 目标领域: ${targetDomains.map(d => SONAR_CONFIG.domains[d]?.name).join(', ')}`);
-      this.log(`📂 输出目录: ${this.options.output}`);
+      this.log(`📂 输出目录: 由MCP服务器根据语言自动选择(~/knowledge/.wikipedia_en 或 ~/knowledge/.wikipedia_zh)`);
       this.log(`🌐 语言版本: ${this.options.language === 'zh' ? '中文' : '英文'}`);
       this.log(`🔧 下载方式: MCP服务器`);
       this.log('='.repeat(50));
+      this.log('');
+      
+      // 执行网络诊断
+      this.log('🔍 执行网络连接诊断...', 'verbose');
+      const diagnosticRequest = this.createJsonRpcRequest('tools/call', {
+        name: 'network_diagnostic',
+        arguments: {
+          target: this.options.language === 'zh' ? 'zhwiki' : 'enwiki',
+          level: 'standard',
+          timeout: 10000
+        }
+      });
+      
+      try {
+        const diagnosticResponse = await this.sendRequest(diagnosticRequest);
+        if (diagnosticResponse.result && diagnosticResponse.result.content) {
+          // 检查诊断结果
+          let isNetworkOK = true;
+          for (const item of diagnosticResponse.result.content) {
+            if (item.type === 'text' && item.text) {
+              if (item.text.includes('⚠️') || item.text.includes('❌') || item.text.includes('检测到网络连接问题')) {
+                isNetworkOK = false;
+                this.log(`   ⚠️ 网络诊断发现问题:\n${item.text}`, 'verbose');
+                break;
+              }
+            }
+          }
+          
+          if (isNetworkOK) {
+            this.log('   ✅ 网络连接状态良好', 'verbose');
+          } else {
+            this.log('   ⚠️ 网络连接存在问题，但仍将继续尝试下载', 'verbose');
+          }
+        }
+      } catch (diagnosticError) {
+        this.log(`   ⚠️ 网络诊断失败: ${diagnosticError.message}`, 'verbose');
+      }
+      
       this.log('');
       
       let downloaded = 0;
@@ -485,12 +423,6 @@ class SonarDownloader {
       fs.writeFileSync('sonar_download_report.json', JSON.stringify(report, null, 2));
       this.log(`📊 报告已保存: sonar_download_report.json`);
       
-      // 检查文件
-      if (fs.existsSync(this.options.output)) {
-        const files = fs.readdirSync(this.options.output);
-        this.log(`📁 ${this.options.output}/ 目录中有 ${files.length} 个文件`);
-      }
-      
     } catch (error) {
       this.log(`❌ 下载失败: ${error.message}`);
     } finally {
@@ -513,7 +445,6 @@ function showHelp() {
 选项:
   --profile PROFILE    研究档案 (full|engineering|basic) [默认: full]
   --max NUMBER         最大下载数量 [默认: 25]
-  --output DIR         输出目录 [默认: .wikipedia_en]
   --language LANG      语言版本 (en|zh) [默认: en]
   --verbose            详细输出
   --help              显示帮助
@@ -530,12 +461,12 @@ function showHelp() {
 下载方式:
   🔧 使用MCP服务器的get_wikipedia_page接口
   📖 确保下载正宗的MediaWiki格式内容
+  📂 文件保存位置由MCP服务器根据语言自动选择(~/knowledge/.wikipedia_en 或 ~/knowledge/.wikipedia_zh)
 
 示例:
   node sonar_downloader.cjs
-  node sonar_downloader.cjs --language zh --output .wikipedia_zh
+  node sonar_downloader.cjs --language zh
   node sonar_downloader.cjs --profile engineering --max 12 --language zh
-  node sonar_downloader.cjs --verbose --output ./my_sonar_wiki
 `);
 }
 
@@ -555,10 +486,6 @@ function parseArgs() {
         break;
       case '--max':
         options.max = parseInt(value);
-        i++;
-        break;
-      case '--output':
-        options.output = value;
         i++;
         break;
       case '--language':
