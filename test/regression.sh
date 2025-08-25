@@ -40,6 +40,7 @@ run_test "Task 4" "./test/task4.sh"
 run_test "Task 5" "./test/task5.sh"
 run_test "Task 6" "./test/task6.sh"
 run_test "Task 7" "./test/task7.sh"
+run_test "Task 8" "./test/task8.sh"
 
 # 总结
 echo ""
