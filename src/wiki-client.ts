@@ -6,6 +6,9 @@
 
 import { Agent as HttpsAgent } from 'https';
 import { Agent as HttpAgent } from 'http';
+import https from 'https';
+import http from 'http';
+import { URL } from 'url';
 import { HttpsProxyAgent } from 'https-proxy-agent/dist/index.js';
 import { HttpProxyAgent } from 'http-proxy-agent/dist/index.js';
 import ErrorHandler, { ErrorType } from './error-handler.js';
@@ -60,6 +63,83 @@ export class MediaWikiClient {
         }
     }
 
+    /**
+     * 使用原生https模块的代理请求方法，更好地支持代理环境
+     */
+    private async proxyAwareRequest(url: string): Promise<any> {
+        return new Promise((resolve, reject) => {
+            const urlObj = new URL(url);
+            const isHttps = urlObj.protocol === 'https:';
+            const requestModule = isHttps ? https : http;
+
+            const options: any = {
+                hostname: urlObj.hostname,
+                port: urlObj.port || (isHttps ? 443 : 80),
+                path: urlObj.pathname + urlObj.search,
+                method: 'GET',
+                headers: {
+                    'User-Agent': this.userAgent,
+                    'Accept': 'application/json',
+                    'Connection': 'close'
+                },
+                timeout: 10000 // 10秒超时
+            };
+
+            // 在代理环境下必须使用agent
+            if (this.agent) {
+                options.agent = this.agent;
+                console.debug(`Using proxy agent for request to ${urlObj.hostname}`);
+            } else {
+                // 如果没有代理配置，在代理环境下会失败，这是预期的
+                console.debug(`No proxy agent configured for request to ${urlObj.hostname}`);
+            }
+
+            const req = requestModule.request(options, (res) => {
+                let data = '';
+
+                res.on('data', (chunk) => {
+                    data += chunk;
+                });
+
+                res.on('end', () => {
+                    if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+                        try {
+                            const jsonData = JSON.parse(data);
+                            resolve(jsonData);
+                        } catch (parseError) {
+                            reject(new Error(`Failed to parse JSON response: ${parseError}`));
+                        }
+                    } else {
+                        reject(new Error(`HTTP error ${res.statusCode}: ${res.statusMessage}`));
+                    }
+                });
+            });
+
+            req.on('error', (error: any) => {
+                if (error.code === 'ENOTFOUND') {
+                    reject(new Error('DNS resolution failed. Please check your DNS settings and network configuration.'));
+                } else if (error.code === 'ECONNREFUSED') {
+                    reject(new Error('Connection refused. Please check your proxy configuration and network connection.'));
+                } else if (error.code === 'ECONNRESET') {
+                    reject(new Error('Connection reset. Please check your network stability and try again.'));
+                } else if (error.code === 'ETIMEDOUT') {
+                    reject(new Error('Connection timed out. Please check your proxy configuration and network connection.'));
+                } else if (error.message && error.message.includes('proxy')) {
+                    reject(new Error('Proxy connection failed. Please check your proxy configuration.'));
+                } else {
+                    reject(new Error(`Network connection failed: ${error.message || error.code}`));
+                }
+            });
+
+            req.on('timeout', () => {
+                req.destroy();
+                reject(new Error('Request timed out after 10 seconds. Please check your proxy configuration and network connection.'));
+            });
+
+            req.end();
+        });
+    }
+
     private async apiRequest(params: Record<string, string>): Promise<any> {
         const cacheKey = this.getCacheKey(params);
 
@@ -76,30 +156,9 @@ export class MediaWikiClient {
 
         const url = `${this.apiUrl}?${queryString}`;
 
-        const options = {
-            headers: {
-                'User-Agent': this.userAgent,
-            },
-            agent: this.agent
-        };
-
         try {
-            const response = await fetch(url, options);
-
-            // 检查 HTTP 状态码
-            if (!response.ok) {
-                if (response.status === 429) {
-                    throw new Error(`Rate limit exceeded. Please wait before making more requests.`);
-                } else if (response.status >= 500) {
-                    throw new Error(`Wikipedia server error (${response.status}). The service may be temporarily unavailable.`);
-                } else if (response.status === 403) {
-                    throw new Error(`Access denied (${response.status}). You may not have permission to access this resource.`);
-                } else {
-                    throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
-                }
-            }
-
-            const data = await response.json();
+            // 使用代理感知的请求方法
+            const data = await this.proxyAwareRequest(url);
 
             // 检查 API 错误
             if (data.error) {
@@ -111,17 +170,7 @@ export class MediaWikiClient {
 
             return data;
         } catch (error) {
-            // 网络错误处理
-            if (error instanceof TypeError && error.message.includes('fetch')) {
-                throw new Error(`Network connection failed. Please check your internet connection and try again.`);
-            }
-
-            // 超时错误处理
-            if (error instanceof Error && error.name === 'AbortError') {
-                throw new Error(`Request timed out. Please try again later.`);
-            }
-
-            // 重新抛出原错误，交由上层处理
+            // 重新抛出错误，保持原始错误信息
             throw error;
         }
     }

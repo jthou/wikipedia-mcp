@@ -4,7 +4,7 @@
  * MediaWiki MCP Server - 包含 list_wikipedia_wikis 和 get_wikipedia_page 功能
  */
 
-import { TOOL_NAMES } from './constants.js';
+import { TOOL_NAMES, DIAGNOSTIC_CONSTANTS, DiagnosticLevel, DiagnosticTarget } from './constants.js';
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -432,6 +432,480 @@ async function handleSmartSearch(args: any): Promise<any> {
   }
 }
 
+/**
+ * 网络连接诊断工具处理器
+ */
+async function handleNetworkDiagnostic(args: any): Promise<any> {
+  try {
+    // 参数验证
+    const target = args?.target || DIAGNOSTIC_CONSTANTS.TARGETS.AUTO;
+    const level = args?.level || DIAGNOSTIC_CONSTANTS.LEVELS.STANDARD;
+    const timeout = args?.timeout || DIAGNOSTIC_CONSTANTS.TIMEOUTS.STANDARD;
+
+    // 验证参数
+    if (!Object.values(DIAGNOSTIC_CONSTANTS.TARGETS).includes(target)) {
+      throw new Error(`不支持的诊断目标: ${target}`);
+    }
+    if (!Object.values(DIAGNOSTIC_CONSTANTS.LEVELS).includes(level)) {
+      throw new Error(`不支持的诊断级别: ${level}`);
+    }
+    if (timeout <= 0) {
+      throw new Error(`超时时间必须大于0: ${timeout}`);
+    }
+
+    const startTime = Date.now();
+    const diagnosticResult = await performNetworkDiagnostic(target, level, timeout);
+    const totalTime = Date.now() - startTime;
+
+    // 格式化诊断结果
+    return {
+      content: [{
+        type: "text",
+        text: formatDiagnosticReport(diagnosticResult, totalTime, target, level)
+      }]
+    };
+  } catch (error) {
+    return ErrorHandler.generateErrorResponse(error, { tool: 'network_diagnostic', args });
+  }
+}
+
+/**
+ * 执行分层网络诊断
+ */
+async function performNetworkDiagnostic(target: string, level: string, timeout: number): Promise<any> {
+  const results: any = {
+    environment: {},
+    network: {},
+    http: {},
+    api: {},
+    analysis: {},
+    recommendations: [] as string[]
+  };
+
+  // 获取目标URL列表
+  const targetUrls = getTargetUrls(target);
+
+  try {
+    // 阶段1：环境层诊断
+    results.environment = await diagnoseEnvironment();
+
+    // 阶段2：网络层诊断
+    if (level === DIAGNOSTIC_CONSTANTS.LEVELS.BASIC ||
+      level === DIAGNOSTIC_CONSTANTS.LEVELS.STANDARD ||
+      level === DIAGNOSTIC_CONSTANTS.LEVELS.DEEP) {
+      results.network = await diagnoseNetwork(targetUrls, timeout);
+    }
+
+    // 阶段3：HTTP层诊断
+    if (level === DIAGNOSTIC_CONSTANTS.LEVELS.STANDARD ||
+      level === DIAGNOSTIC_CONSTANTS.LEVELS.DEEP) {
+      results.http = await diagnoseHTTP(targetUrls, timeout);
+    }
+
+    // 阶段4：API层诊断
+    if (level === DIAGNOSTIC_CONSTANTS.LEVELS.DEEP) {
+      results.api = await diagnoseAPI(targetUrls, timeout);
+    }
+
+    // 分析和建议生成
+    results.analysis = analyzeResults(results);
+    results.recommendations = generateRecommendations(results);
+
+  } catch (error: any) {
+    results.analysis = { error: error?.message || '未知错误' };
+    results.recommendations = ['诊断过程中出现错误，建议检查网络连接后重试'];
+  }
+
+  return results;
+}
+
+/**
+ * 获取诊断目标URL列表
+ */
+function getTargetUrls(target: string): string[] {
+  const urls = [];
+
+  switch (target) {
+    case DIAGNOSTIC_CONSTANTS.TARGETS.AUTO:
+    case DIAGNOSTIC_CONSTANTS.TARGETS.WIKIPEDIA:
+      urls.push('https://en.wikipedia.org/w/api.php');
+      urls.push('https://zh.wikipedia.org/w/api.php');
+      break;
+    case DIAGNOSTIC_CONSTANTS.TARGETS.ENWIKI:
+      urls.push('https://en.wikipedia.org/w/api.php');
+      break;
+    case DIAGNOSTIC_CONSTANTS.TARGETS.ZHWIKI:
+      urls.push('https://zh.wikipedia.org/w/api.php');
+      break;
+    default:
+      urls.push('https://en.wikipedia.org/w/api.php'); // 默认
+      break;
+  }
+
+  return urls;
+}
+
+/**
+ * 环境层诊断
+ */
+async function diagnoseEnvironment() {
+  const result = {
+    nodeVersion: process.version,
+    platform: process.platform,
+    arch: process.arch,
+    proxy: {
+      http: process.env.HTTP_PROXY || 'Not set',
+      https: process.env.HTTPS_PROXY || 'Not set'
+    },
+    environment: {
+      wikipediaEnApi: process.env.WIKIPEDIA_EN_API || 'Using default',
+      wikipediaZhApi: process.env.WIKIPEDIA_ZH_API || 'Using default'
+    },
+    status: 'OK'
+  };
+
+  return result;
+}
+
+/**
+ * 网络层诊断
+ */
+async function diagnoseNetwork(urls: string[], timeout: number) {
+  const results = [];
+
+  for (const url of urls) {
+    const urlObj = new URL(url);
+    const result = {
+      url: url,
+      hostname: urlObj.hostname,
+      port: urlObj.port || '443',
+      dnsResolution: 'Unknown',
+      connectivity: 'Unknown',
+      responseTime: 0
+    };
+
+    try {
+      const startTime = Date.now();
+
+      // 简单的连通性测试
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+      await fetch(url + '?action=query&meta=siteinfo&format=json&formatversion=2', {
+        method: 'HEAD',
+        signal: controller.signal,
+        headers: { 'User-Agent': 'wikipedia-mcp-diagnostic/1.0' }
+      });
+
+      clearTimeout(timeoutId);
+      result.responseTime = Date.now() - startTime;
+      result.dnsResolution = 'OK';
+      result.connectivity = 'OK';
+
+    } catch (error) {
+      result.dnsResolution = 'Failed';
+      result.connectivity = 'Failed';
+      result.responseTime = timeout;
+    }
+
+    results.push(result);
+  }
+
+  return { targets: results, status: results.every(r => r.connectivity === 'OK') ? 'OK' : 'Failed' };
+}
+
+/**
+ * HTTP层诊断
+ */
+async function diagnoseHTTP(urls: string[], timeout: number) {
+  const results = [];
+
+  for (const url of urls) {
+    const result = {
+      url: url,
+      httpStatus: 0,
+      headers: {},
+      sslStatus: 'Unknown',
+      responseTime: 0,
+      contentType: 'Unknown'
+    };
+
+    try {
+      const startTime = Date.now();
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+      const response = await fetch(url + '?action=query&meta=siteinfo&format=json&formatversion=2', {
+        signal: controller.signal,
+        headers: { 'User-Agent': 'wikipedia-mcp-diagnostic/1.0' }
+      });
+
+      clearTimeout(timeoutId);
+      result.responseTime = Date.now() - startTime;
+      result.httpStatus = response.status;
+      result.contentType = response.headers.get('content-type') || 'Unknown';
+      result.sslStatus = 'OK';
+      result.headers = {
+        'content-type': response.headers.get('content-type'),
+        'server': response.headers.get('server'),
+        'cache-control': response.headers.get('cache-control')
+      };
+
+    } catch (error) {
+      result.httpStatus = 0;
+      result.sslStatus = 'Failed';
+      result.responseTime = timeout;
+    }
+
+    results.push(result);
+  }
+
+  return { targets: results, status: results.every(r => r.httpStatus === 200) ? 'OK' : 'Failed' };
+}
+
+/**
+ * API层诊断
+ */
+async function diagnoseAPI(urls: string[], timeout: number) {
+  const results = [];
+
+  for (const url of urls) {
+    const result = {
+      url: url,
+      apiResponse: 'Unknown',
+      apiData: {},
+      responseTime: 0,
+      dataValid: false
+    };
+
+    try {
+      const startTime = Date.now();
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+      const response = await fetch(url + '?action=query&meta=siteinfo&format=json&formatversion=2', {
+        signal: controller.signal,
+        headers: { 'User-Agent': 'wikipedia-mcp-diagnostic/1.0' }
+      });
+
+      clearTimeout(timeoutId);
+      result.responseTime = Date.now() - startTime;
+
+      if (response.ok) {
+        const data = await response.json();
+        result.apiResponse = 'OK';
+        result.dataValid = data && data.query && data.query.general;
+        result.apiData = {
+          sitename: data?.query?.general?.sitename || 'Unknown',
+          generator: data?.query?.general?.generator || 'Unknown',
+          phpversion: data?.query?.general?.phpversion || 'Unknown'
+        };
+      } else {
+        result.apiResponse = `HTTP ${response.status}`;
+      }
+
+    } catch (error) {
+      result.apiResponse = 'Failed';
+      result.responseTime = timeout;
+    }
+
+    results.push(result);
+  }
+
+  return { targets: results, status: results.every(r => r.apiResponse === 'OK' && r.dataValid) ? 'OK' : 'Failed' };
+}
+
+/**
+ * 分析诊断结果
+ */
+function analyzeResults(results: any): any {
+  const analysis: any = {
+    overallStatus: 'Unknown',
+    issues: [] as string[],
+    performance: {},
+    summary: ''
+  };
+
+  // 计算整体状态
+  const layers = ['environment', 'network', 'http', 'api'];
+  const layerStatuses = layers.map(layer => results[layer]?.status).filter(Boolean);
+
+  if (layerStatuses.every(status => status === 'OK')) {
+    analysis.overallStatus = 'OK';
+    analysis.summary = '✅ 所有诊断层次都正常，网络连接状态良好';
+  } else {
+    analysis.overallStatus = 'Issues Detected';
+    analysis.summary = '⚠️ 检测到网络连接问题，需要进一步排查';
+  }
+
+  // 识别具体问题
+  if (results.network?.status !== 'OK') {
+    analysis.issues.push('网络连接异常');
+  }
+  if (results.http?.status !== 'OK') {
+    analysis.issues.push('HTTP层连接问题');
+  }
+  if (results.api?.status !== 'OK') {
+    analysis.issues.push('API接口响应异常');
+  }
+
+  // 性能分析
+  const allResponseTimes: number[] = [];
+  ['network', 'http', 'api'].forEach(layer => {
+    if (results[layer]?.targets) {
+      results[layer].targets.forEach((target: any) => {
+        if (target.responseTime > 0) {
+          allResponseTimes.push(target.responseTime);
+        }
+      });
+    }
+  });
+
+  if (allResponseTimes.length > 0) {
+    analysis.performance = {
+      averageResponseTime: allResponseTimes.reduce((a, b) => a + b, 0) / allResponseTimes.length,
+      maxResponseTime: Math.max(...allResponseTimes),
+      minResponseTime: Math.min(...allResponseTimes)
+    };
+  }
+
+  return analysis;
+}
+
+/**
+ * 生成解决建议
+ */
+function generateRecommendations(results: any): string[] {
+  const recommendations: string[] = [];
+
+  // 基于环境层问题的建议
+  if (results.environment?.proxy?.http !== 'Not set' || results.environment?.proxy?.https !== 'Not set') {
+    recommendations.push('💡 检测到代理配置，如遇连接问题请验证代理服务器状态');
+  }
+
+  // 基于网络层问题的建议
+  if (results.network?.status !== 'OK') {
+    recommendations.push('🔧 网络连接异常，建议：1) 检查网络连接 2) 验证DNS设置 3) 检查防火墙规则');
+  }
+
+  // 基于HTTP层问题的建议
+  if (results.http?.status !== 'OK') {
+    recommendations.push('🔧 HTTP连接问题，建议：1) 检查HTTPS证书 2) 验证代理配置 3) 确认端口443可访问');
+  }
+
+  // 基于API层问题的建议
+  if (results.api?.status !== 'OK') {
+    recommendations.push('🔧 API接口异常，建议：1) 检查API地址正确性 2) 验证请求格式 3) 确认服务器状态');
+  }
+
+  // 性能建议
+  if (results.analysis?.performance?.averageResponseTime > 5000) {
+    recommendations.push('⚡ 响应时间较慢，建议：1) 检查网络带宽 2) 考虑使用CDN 3) 优化请求参数');
+  }
+
+  // 如果没有问题，提供维护建议
+  if (recommendations.length === 0) {
+    recommendations.push('✅ 网络连接状态良好，建议定期运行诊断以确保稳定性');
+  }
+
+  return recommendations;
+}
+
+/**
+ * 格式化诊断报告
+ */
+function formatDiagnosticReport(results: any, totalTime: number, target: string, level: string): string {
+  let report = `# 网络连接诊断报告\n\n`;
+  report += `📋 **诊断配置**\n`;
+  report += `- 目标: ${target}\n`;
+  report += `- 级别: ${level}\n`;
+  report += `- 总耗时: ${totalTime}ms\n\n`;
+
+  // 环境层诊断结果
+  if (results.environment) {
+    report += `## 🏗️ 环境层诊断\n\n`;
+    report += `- Node.js版本: ${results.environment.nodeVersion}\n`;
+    report += `- 平台: ${results.environment.platform} (${results.environment.arch})\n`;
+    report += `- HTTP代理: ${results.environment.proxy.http}\n`;
+    report += `- HTTPS代理: ${results.environment.proxy.https}\n`;
+    report += `- 状态: ${results.environment.status === 'OK' ? '✅ 正常' : '❌ 异常'}\n\n`;
+  }
+
+  // 网络层诊断结果
+  if (results.network) {
+    report += `## 🌐 网络层诊断\n\n`;
+    results.network.targets?.forEach((target: any, index: number) => {
+      report += `**目标 ${index + 1}: ${target.hostname}**\n`;
+      report += `- DNS解析: ${target.dnsResolution === 'OK' ? '✅ 正常' : '❌ 失败'}\n`;
+      report += `- 连通性: ${target.connectivity === 'OK' ? '✅ 正常' : '❌ 失败'}\n`;
+      report += `- 响应时间: ${target.responseTime}ms\n\n`;
+    });
+    report += `状态: ${results.network.status === 'OK' ? '✅ 正常' : '❌ 异常'}\n\n`;
+  }
+
+  // HTTP层诊断结果
+  if (results.http) {
+    report += `## 🔗 HTTP层诊断\n\n`;
+    results.http.targets?.forEach((target: any, index: number) => {
+      report += `**目标 ${index + 1}: ${new URL(target.url).hostname}**\n`;
+      report += `- HTTP状态: ${target.httpStatus === 200 ? '✅ 200 OK' : `❌ ${target.httpStatus}`}\n`;
+      report += `- SSL状态: ${target.sslStatus === 'OK' ? '✅ 正常' : '❌ 异常'}\n`;
+      report += `- 内容类型: ${target.contentType}\n`;
+      report += `- 响应时间: ${target.responseTime}ms\n\n`;
+    });
+    report += `状态: ${results.http.status === 'OK' ? '✅ 正常' : '❌ 异常'}\n\n`;
+  }
+
+  // API层诊断结果
+  if (results.api) {
+    report += `## 🔌 API层诊断\n\n`;
+    results.api.targets?.forEach((target: any, index: number) => {
+      report += `**目标 ${index + 1}: ${new URL(target.url).hostname}**\n`;
+      report += `- API响应: ${target.apiResponse === 'OK' ? '✅ 正常' : `❌ ${target.apiResponse}`}\n`;
+      report += `- 数据有效性: ${target.dataValid ? '✅ 有效' : '❌ 无效'}\n`;
+      if (target.apiData?.sitename) {
+        report += `- 站点名称: ${target.apiData.sitename}\n`;
+      }
+      report += `- 响应时间: ${target.responseTime}ms\n\n`;
+    });
+    report += `状态: ${results.api.status === 'OK' ? '✅ 正常' : '❌ 异常'}\n\n`;
+  }
+
+  // 分析结果
+  if (results.analysis) {
+    report += `## 📊 分析结果\n\n`;
+    report += `${results.analysis.summary}\n\n`;
+
+    if (results.analysis.performance?.averageResponseTime) {
+      report += `**性能指标:**\n`;
+      report += `- 平均响应时间: ${results.analysis.performance.averageResponseTime.toFixed(2)}ms\n`;
+      report += `- 最大响应时间: ${results.analysis.performance.maxResponseTime}ms\n`;
+      report += `- 最小响应时间: ${results.analysis.performance.minResponseTime}ms\n\n`;
+    }
+
+    if (results.analysis.issues?.length > 0) {
+      report += `**发现的问题:**\n`;
+      results.analysis.issues.forEach((issue: string) => {
+        report += `- ${issue}\n`;
+      });
+      report += `\n`;
+    }
+  }
+
+  // 解决建议
+  if (results.recommendations?.length > 0) {
+    report += `## 💡 解决建议\n\n`;
+    results.recommendations.forEach((rec: string) => {
+      report += `${rec}\n\n`;
+    });
+  }
+
+  report += `---\n`;
+  report += `*诊断完成时间: ${new Date().toLocaleString()}*`;
+
+  return report;
+}
+
 // 创建 MCP 服务器实例
 const server = new Server(
   { name: "mediawiki-mcp", version: "0.1.0" },
@@ -616,8 +1090,35 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           },
           required: ["wiki", "query"]
         }
+      },
+      {
+        name: "network_diagnostic",
+        description: "Intelligent network connection diagnostic tool with layered analysis",
+        inputSchema: {
+          type: "object",
+          properties: {
+            target: {
+              type: "string",
+              description: "Diagnostic target",
+              enum: ["auto", "wikipedia", "enwiki", "zhwiki", "custom"],
+              default: "auto"
+            },
+            level: {
+              type: "string",
+              description: "Diagnostic depth level",
+              enum: ["basic", "standard", "deep"],
+              default: "standard"
+            },
+            timeout: {
+              type: "number",
+              description: "Timeout in milliseconds",
+              default: 10000,
+              minimum: 1000,
+              maximum: 30000
+            }
+          }
+        }
       }
-      // ...existing code...
     ]
   };
 });
@@ -645,6 +1146,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     case "smart_search":
       return await handleSmartSearch(request.params.arguments);
+
+    case "network_diagnostic":
+      return await handleNetworkDiagnostic(request.params.arguments);
 
     default:
       throw new Error(`Unknown tool: ${toolName}`);
