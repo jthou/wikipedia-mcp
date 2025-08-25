@@ -20,6 +20,10 @@ import { config } from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 
+// 导入 MediaWiki 客户端和异常处理器
+import { MediaWikiClient, WikiConfig } from './wiki-client.js';
+import ErrorHandler from './error-handler.js';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -50,9 +54,6 @@ const fetchConfig = {
   agent: envVars.httpsProxy ? new (await import('https-proxy-agent')).HttpsProxyAgent(envVars.httpsProxy) : undefined
 };
 
-// 导入 MediaWiki 客户端
-import { MediaWikiClient, WikiConfig } from './wiki-client.js';
-
 // 可用的 wiki 配置
 const wikiConfigs: {
   [key: string]: WikiConfig
@@ -71,21 +72,19 @@ const wikiConfigs: {
 
 // 通用 wiki 操作处理函数
 async function handleWikiOperation(args: any): Promise<any> {
-  const wiki = String(args?.wiki || '');
-  const action = String(args?.action || '');
-  const title = String(args?.title || '');
-
-  if (!wiki || !action || !title) {
-    throw new Error("Parameters 'wiki', 'action', and 'title' are required");
-  }
-
-  if (!wikiConfigs[wiki]) {
-    throw new Error(`Unknown wiki: ${wiki}`);
-  }
-
-  const client = new MediaWikiClient(wikiConfigs[wiki]);
-
   try {
+    // 参数验证
+    ErrorHandler.validateParameters(args, ['wiki', 'action', 'title']);
+
+    const wiki = String(args.wiki);
+    const action = String(args.action);
+    const title = String(args.title);
+
+    // 验证wiki实例
+    ErrorHandler.validateWiki(wiki, Object.keys(wikiConfigs));
+
+    const client = new MediaWikiClient(wikiConfigs[wiki]);
+
     switch (action) {
       case 'get':
         const pageContent = await client.getPage(title);
@@ -127,7 +126,10 @@ async function handleWikiOperation(args: any): Promise<any> {
         };
 
       case 'search':
-        const limit = Number(args?.limit || 10);
+        const limit = args?.limit !== undefined ? Number(args.limit) : 10;
+        // 验证搜索限制
+        ErrorHandler.validateSearchLimit(limit);
+
         const searchResults = await client.searchPages(title, limit);
         return {
           content: [{
@@ -144,12 +146,7 @@ async function handleWikiOperation(args: any): Promise<any> {
         throw new Error(`Unknown action: ${action}. Supported actions: get, search`);
     }
   } catch (error) {
-    return {
-      content: [{
-        type: "text",
-        text: `Error performing ${action} on page "${title}" from ${wiki}: ${error instanceof Error ? error.message : String(error)}`
-      }]
-    };
+    return ErrorHandler.generateErrorResponse(error, { tool: 'wiki_wikipedia_operation', args });
   }
 }
 
@@ -166,20 +163,18 @@ async function handleListWikis(): Promise<any> {
 }
 
 async function handleGetPage(args: any): Promise<any> {
-  const wiki = String(args?.wiki || '');
-  const title = String(args?.title || '');
-
-  console.error(`[DEBUG] handleGetPage called with wiki: ${wiki}, title: ${title}`);
-
-  if (!wiki || !title) {
-    throw new Error("Both 'wiki' and 'title' parameters are required");
-  }
-
-  if (!wikiConfigs[wiki]) {
-    throw new Error(`Unknown wiki: ${wiki}`);
-  }
-
   try {
+    // 参数验证
+    ErrorHandler.validateParameters(args, ['wiki', 'title']);
+
+    const wiki = String(args.wiki);
+    const title = String(args.title);
+
+    console.error(`[DEBUG] handleGetPage called with wiki: ${wiki}, title: ${title}`);
+
+    // 验证wiki实例
+    ErrorHandler.validateWiki(wiki, Object.keys(wikiConfigs));
+
     console.error(`[DEBUG] Creating MediaWikiClient for ${wiki}`);
     const client = new MediaWikiClient(wikiConfigs[wiki]);
 
@@ -247,32 +242,24 @@ async function handleGetPage(args: any): Promise<any> {
     };
   } catch (error) {
     console.error(`[DEBUG] Error in handleGetPage:`, error);
-    return {
-      content: [{
-        type: "text",
-        text: `Error retrieving page "${title}" from ${wiki}: ${error instanceof Error ? error.message : String(error)}`
-      }]
-    };
+    return ErrorHandler.generateErrorResponse(error, { tool: 'get_wikipedia_page', args });
   }
 } async function handleSearchPages(args: any): Promise<any> {
-  const wiki = String(args?.wiki || '');
-  const query = String(args?.query || '');
-  const limit = Number(args?.limit || 10);
-  const namespace = Array.isArray(args?.namespace) ? args.namespace.map(Number) : [0];
-
-  if (!wiki || !query) {
-    throw new Error("Both 'wiki' and 'query' parameters are required");
-  }
-
-  if (!wikiConfigs[wiki]) {
-    throw new Error(`Unknown wiki: ${wiki}`);
-  }
-
-  if (limit <= 0 || limit > 50) {
-    throw new Error("Limit must be between 1 and 50");
-  }
-
   try {
+    // 参数验证
+    ErrorHandler.validateParameters(args, ['wiki', 'query']);
+
+    const wiki = String(args.wiki);
+    const query = String(args.query);
+    const limit = args?.limit !== undefined ? Number(args.limit) : 10;
+    const namespace = Array.isArray(args?.namespace) ? args.namespace.map(Number) : [0];
+
+    // 验证wiki实例
+    ErrorHandler.validateWiki(wiki, Object.keys(wikiConfigs));
+
+    // 验证搜索限制
+    ErrorHandler.validateSearchLimit(limit);
+
     const client = new MediaWikiClient(wikiConfigs[wiki]);
     const searchResult = await client.searchPages(query, limit, namespace);
 
@@ -310,14 +297,8 @@ async function handleGetPage(args: any): Promise<any> {
         text: resultText
       }]
     };
-
   } catch (error) {
-    return {
-      content: [{
-        type: "text",
-        text: `Error searching in ${wiki}: ${error instanceof Error ? error.message : String(error)}`
-      }]
-    };
+    return ErrorHandler.generateErrorResponse(error, { tool: 'search_pages', args });
   }
 }
 
