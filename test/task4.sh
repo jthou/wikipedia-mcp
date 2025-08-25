@@ -120,7 +120,7 @@ function runSingleTest(testEnv) {
       }
       
       resolve(testPassed);
-    }, 5000);
+    }, 8000);
 
     // 发送测试请求
     setTimeout(() => {

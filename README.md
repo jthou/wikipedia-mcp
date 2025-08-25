@@ -55,6 +55,10 @@ WIKI_OUTPUT_DIR=/path/to/output/directory
 # 可选：缓存管理配置
 MAX_CACHED_FILES=100
 MAX_FILE_AGE_DAYS=30
+
+# 可选：网络超时配置（适应网络延迟）
+API_TIMEOUT=10000
+TEST_TIMEOUT=15000
 ```
 
 ### 在 Tencent CodeBuddy IDE 中使用

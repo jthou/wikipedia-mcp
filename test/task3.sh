@@ -46,7 +46,7 @@ setTimeout(() => {
     console.log('❌ Task 3 FAILED: list_wikipedia_wikis does not show Wikipedia instances correctly');
     process.exit(1);
   }
-}, 5000);
+}, 8000);
 
 // 发送 list_wikipedia_wikis 请求
 setTimeout(() => {

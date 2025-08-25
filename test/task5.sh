@@ -222,7 +222,7 @@ function runSingleScenario(scenario) {
             }
             
             resolve(scenarioPassed);
-        }, 5000);
+        }, 8000);
 
         // 发送基本的工具列表请求
         setTimeout(() => {

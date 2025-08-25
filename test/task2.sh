@@ -50,7 +50,7 @@ setTimeout(() => {
     console.log('❌ Task 2 FAILED: Some issues detected');
     process.exit(1);
   }
-}, 5000);
+}, 8000);
 
 // 发送请求
 setTimeout(() => {

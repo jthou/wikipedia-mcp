@@ -484,7 +484,7 @@ export class MediaWikiClient {
             includeFulltext = true,
             includePrefix = true,
             includeOpenSearch = true,
-            timeout = 5000  // 5秒超时
+            timeout = 10000  // 10秒超时，适应网络延迟
         } = options;
 
         const startTime = Date.now();
