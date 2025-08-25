@@ -41,7 +41,7 @@ const SONAR_CONFIG = {
       weight: 1.0,
       articles: {
         en: ["Sonar", "Active sonar", "Passive sonar", "Sonar dome", "Transducer", "Beam forming", "Sonar signal processing"],
-        zh: ["声呐", "主动声呐", "被动声呐", "换能器", "波束成形", "水声定位"]
+        zh: ["声呐", "主动声呐", "被动声呐", "换能器", "波束成形", "水声定位", "声呐信号处理"]
       }
     },
     hardware: {
@@ -49,7 +49,7 @@ const SONAR_CONFIG = {
       weight: 0.8,
       articles: {
         en: ["Hydrophone", "Sonar transducer", "Towed array sonar", "Variable depth sonar", "Hull-mounted sonar", "Acoustic antenna"],
-        zh: ["水听器", "声呐换能器", "拖曳阵声呐", "变深声呐"]
+        zh: ["水听器", "声呐换能器", "拖曳阵声呐", "变深声呐", "舰壳声呐", "声学天线"]
       }
     },
     apps: {
@@ -57,7 +57,7 @@ const SONAR_CONFIG = {
       weight: 0.9,
       articles: {
         en: ["Bathymetry", "Side-scan sonar", "Multibeam echosounder", "Fish finder", "Naval sonar", "Commercial sonar", "Geological survey"],
-        zh: ["测深法", "侧扫声呐", "多波束测深", "探鱼器", "军用声呐"]
+        zh: ["测深法", "侧扫声呐", "多波束测深", "探鱼器", "军用声呐", "商用声呐", "地质勘探"]
       }
     },
     acoustics: {
@@ -65,7 +65,7 @@ const SONAR_CONFIG = {
       weight: 0.7,
       articles: {
         en: ["Underwater acoustics", "Acoustic positioning system", "Sound Surveillance System", "Acoustic signature", "Acoustic torpedo", "Sound channel", "Acoustic propagation"],
-        zh: ["水下声学", "声学定位系统", "声学鱼雷", "声传播"]
+        zh: ["水下声学", "声学定位系统", "声学鱼雷", "声传播", "声信道", "水声传播", "声学特征"]
       }
     },
     bio: {
@@ -73,7 +73,7 @@ const SONAR_CONFIG = {
       weight: 0.6,
       articles: {
         en: ["Echolocation", "Biosonar", "Animal echolocation", "Dolphin echolocation", "Bat echolocation", "Marine mammal acoustics"],
-        zh: ["回声定位", "生物声呐", "动物回声定位", "海豚回声定位", "蝙蝠回声定位"]
+        zh: ["回声定位", "生物声呐", "动物回声定位", "海豚回声定位", "蝙蝠回声定位", "海洋哺乳动物声学"]
       }
     }
   },
@@ -92,9 +92,9 @@ class SonarDownloader {
   constructor(options = {}) {
     this.options = {
       profile: options.profile || 'full',
-      max: options.max || 25,
+      max: options.max || 20,
       verbose: options.verbose || false,
-      language: options.language || 'en',
+      language: options.language || 'both', // 改为支持 both 选项
       ...options
     };
     
@@ -194,12 +194,12 @@ class SonarDownloader {
     });
   }
 
-  async downloadArticle(title) {
-    this.log(`📄 下载: ${title}`, 'verbose');
+  async downloadArticle(title, language) {
+    this.log(`📄 下载: ${title} (${language === 'zh' ? '中文' : '英文'})`, 'verbose');
     
     try {
       // 设置wiki语言
-      const wiki = this.options.language === 'zh' ? 'zhwiki' : 'enwiki';
+      const wiki = language === 'zh' ? 'zhwiki' : 'enwiki';
       
       // 使用MCP服务器的get_wikipedia_page工具下载文章
       // 让工具自己处理文件保存，不再干预其内部逻辑
@@ -216,7 +216,7 @@ class SonarDownloader {
       // 检查MCP服务器是否返回错误
       if (response.error) {
         this.log(`   ❌ ${title} - ${response.error.message || 'MCP服务器错误'}`);
-        this.results.failed.push({ title, error: response.error.message || 'MCP服务器错误' });
+        this.results.failed.push({ title, language, error: response.error.message || 'MCP服务器错误' });
         return false;
       }
       
@@ -242,7 +242,7 @@ class SonarDownloader {
               }
               
               this.log(`   ❌ ${title} - ${errorMessage}`);
-              this.results.failed.push({ title, error: errorMessage });
+              this.results.failed.push({ title, language, error: errorMessage });
               return false;
             }
             // 检查是否是成功消息
@@ -260,6 +260,7 @@ class SonarDownloader {
               this.log(`   ✅ ${title} (${Math.round(contentLength / 1024)}KB)`);
               this.results.success.push({ 
                 title: title,
+                language: language,
                 filename: filename, 
                 size: contentLength,
                 timestamp: new Date().toISOString() 
@@ -271,18 +272,18 @@ class SonarDownloader {
         
         // 如果没有找到明确的成功或错误消息
         this.log(`   ❌ ${title} - 未知响应格式`);
-        this.results.failed.push({ title, error: 'Unknown response format' });
+        this.results.failed.push({ title, language, error: 'Unknown response format' });
         return false;
       }
       
       this.log(`   ❌ ${title} - 无内容`);
-      this.results.failed.push({ title, error: 'No content found' });
+      this.results.failed.push({ title, language, error: 'No content found' });
       return false;
       
     } catch (error) {
       // 添加更详细的错误信息
       this.log(`   ❌ ${title} - ${error.message}`);
-      this.results.failed.push({ title, error: error.message });
+      this.results.failed.push({ title, language, error: error.message });
       return false;
     }
   }
@@ -322,17 +323,17 @@ class SonarDownloader {
       this.log(`📈 最大文章数: ${maxArticles}`);
       this.log(`🎯 目标领域: ${targetDomains.map(d => SONAR_CONFIG.domains[d]?.name).join(', ')}`);
       this.log(`📂 输出目录: 由MCP服务器根据语言自动选择(~/knowledge/.wikipedia_en 或 ~/knowledge/.wikipedia_zh)`);
-      this.log(`🌐 语言版本: ${this.options.language === 'zh' ? '中文' : '英文'}`);
+      this.log(`🌐 语言版本: ${this.options.language === 'both' ? '中英文' : this.options.language === 'zh' ? '中文' : '英文'}`);
       this.log(`🔧 下载方式: MCP服务器`);
       this.log('='.repeat(50));
       this.log('');
       
-      // 执行网络诊断
+      // 执行网络诊断 (对英文版本)
       this.log('🔍 执行网络连接诊断...', 'verbose');
       const diagnosticRequest = this.createJsonRpcRequest('tools/call', {
         name: 'network_diagnostic',
         arguments: {
-          target: this.options.language === 'zh' ? 'zhwiki' : 'enwiki',
+          target: 'enwiki', // 使用英文版本进行诊断
           level: 'standard',
           timeout: 10000
         }
@@ -366,10 +367,11 @@ class SonarDownloader {
       this.log('');
       
       let downloaded = 0;
+      const languages = this.options.language === 'both' ? ['en', 'zh'] : [this.options.language];
       
       // 按领域下载
       for (const domainKey of targetDomains) {
-        if (downloaded >= maxArticles) break;
+        if (downloaded >= maxArticles * languages.length) break;
         
         const domain = SONAR_CONFIG.domains[domainKey];
         if (!domain) continue;
@@ -377,16 +379,18 @@ class SonarDownloader {
         this.log(`📚 ${domain.name}:`);
         
         // 遍历该领域的文章
-        const articles = domain.articles[this.options.language] || domain.articles['en'] || [];
-        for (const article of articles) {
-          if (downloaded >= maxArticles) break;
-          
-          this.log(`🔍 准备下载: ${article}`, 'verbose');
-          const success = await this.downloadArticle(article);
-          if (success) downloaded++;
-          
-          // 添加延迟以避免过于频繁的请求
-          await new Promise(resolve => setTimeout(resolve, 1000));
+        for (const language of languages) {
+          const articles = domain.articles[language] || [];
+          for (const article of articles) {
+            if (downloaded >= maxArticles * languages.length) break;
+            
+            this.log(`🔍 准备下载: ${article} (${language === 'zh' ? '中文' : '英文'})`, 'verbose');
+            const success = await this.downloadArticle(article, language);
+            if (success) downloaded++;
+            
+            // 添加延迟以避免过于频繁的请求
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
         }
         
         this.log('');
@@ -404,7 +408,7 @@ class SonarDownloader {
         config: this.options,
         downloadMethod: 'MCP Server',
         summary: {
-          requested: maxArticles,
+          requested: maxArticles * languages.length,
           successful: this.results.success.length,
           failed: this.results.failed.length,
           success_rate: Math.round((this.results.success.length / (this.results.success.length + this.results.failed.length || 1)) * 100)
@@ -445,7 +449,7 @@ function showHelp() {
 选项:
   --profile PROFILE    研究档案 (full|engineering|basic) [默认: full]
   --max NUMBER         最大下载数量 [默认: 25]
-  --language LANG      语言版本 (en|zh) [默认: en]
+  --language LANG      语言版本 (en|zh|both) [默认: both]
   --verbose            详细输出
   --help              显示帮助
 
@@ -455,8 +459,9 @@ function showHelp() {
   basic       基础研究 (10篇) - 理论基础+生物声学
 
 语言选项:
-  en          英文版 Wikipedia (默认)
+  en          英文版 Wikipedia
   zh          中文版 Wikipedia
+  both        中英文版 Wikipedia (默认)
 
 下载方式:
   🔧 使用MCP服务器的get_wikipedia_page接口
@@ -466,7 +471,8 @@ function showHelp() {
 示例:
   node sonar_downloader.cjs
   node sonar_downloader.cjs --language zh
-  node sonar_downloader.cjs --profile engineering --max 12 --language zh
+  node sonar_downloader.cjs --profile engineering --max 12
+  node sonar_downloader.cjs --language both --max 20
 `);
 }
 
