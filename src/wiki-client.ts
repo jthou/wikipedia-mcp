@@ -295,7 +295,8 @@ export class MediaWikiClient {
                 console.warn(`Page "${title}" redirects to "${page.title}"`);
             }
 
-            const content = page.revisions?.[0]?.slots?.main?.content;
+            // 修复：正确访问MediaWiki API返回的内容字段
+            const content = page.revisions?.[0]?.slots?.main?.["*"];
             if (!content) {
                 throw new Error(`No content found for page "${title}"`);
             }
