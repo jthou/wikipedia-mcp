@@ -43,7 +43,7 @@ setTimeout(() => {
     console.log('❌ Task 1 FAILED: list_wikipedia_wikis tool or Wikipedia instances not found');
     process.exit(1);
   }
-}, 5000);
+}, 8000);
 
 // 发送请求
 setTimeout(() => {
