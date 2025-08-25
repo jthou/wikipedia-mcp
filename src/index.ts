@@ -19,6 +19,9 @@ import * as crypto from 'crypto';
 import { config } from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import https from 'https';
+import http from 'http';
+import { URL } from 'url';
 
 // 导入 MediaWiki 客户端和异常处理器
 import { MediaWikiClient, WikiConfig } from './wiki-client.js';
@@ -440,7 +443,7 @@ async function handleNetworkDiagnostic(args: any): Promise<any> {
     // 参数验证
     const target = args?.target || DIAGNOSTIC_CONSTANTS.TARGETS.AUTO;
     const level = args?.level || DIAGNOSTIC_CONSTANTS.LEVELS.STANDARD;
-    const timeout = args?.timeout || DIAGNOSTIC_CONSTANTS.TIMEOUTS.STANDARD;
+    const timeout = args?.timeout !== undefined ? args.timeout : DIAGNOSTIC_CONSTANTS.TIMEOUTS.STANDARD;
 
     // 验证参数
     if (!Object.values(DIAGNOSTIC_CONSTANTS.TARGETS).includes(target)) {
@@ -467,6 +470,92 @@ async function handleNetworkDiagnostic(args: any): Promise<any> {
   } catch (error) {
     return ErrorHandler.generateErrorResponse(error, { tool: 'network_diagnostic', args });
   }
+}
+
+/**
+ * 使用原生https模块的代理请求方法，用于网络诊断
+ */
+async function proxyAwareRequestForDiagnostic(url: string, timeout: number, method: string = 'GET'): Promise<{ statusCode: number, headers: any, data?: any, responseTime: number }> {
+  return new Promise((resolve, reject) => {
+    const urlObj = new URL(url);
+    const isHttps = urlObj.protocol === 'https:';
+    const requestModule = isHttps ? https : http;
+
+    const startTime = Date.now();
+
+    const options: any = {
+      hostname: urlObj.hostname,
+      port: urlObj.port || (isHttps ? 443 : 80),
+      path: urlObj.pathname + urlObj.search,
+      method: method,
+      headers: {
+        'User-Agent': 'wikipedia-mcp-diagnostic/1.0',
+        'Accept': 'application/json',
+        'Connection': 'close'
+      },
+      timeout: timeout
+    };
+
+    // 在代理环境下使用agent
+    if (fetchConfig.agent) {
+      options.agent = fetchConfig.agent;
+      console.debug(`[Diagnostic] Using proxy agent for request to ${urlObj.hostname}`);
+    }
+
+    const req = requestModule.request(options, (res) => {
+      let data = '';
+      const responseTime = Date.now() - startTime;
+
+      res.on('data', (chunk) => {
+        data += chunk;
+      });
+
+      res.on('end', () => {
+        const result = {
+          statusCode: res.statusCode || 0,
+          headers: res.headers,
+          responseTime: responseTime
+        };
+
+        // 如果是JSON响应，尝试解析
+        if (res.headers['content-type']?.includes('application/json') && data) {
+          try {
+            (result as any).data = JSON.parse(data);
+          } catch (parseError) {
+            // 忽略JSON解析错误，只返回状态码
+          }
+        }
+
+        resolve(result);
+      });
+    });
+
+    req.on('error', (error: any) => {
+      const responseTime = Date.now() - startTime;
+      let errorMessage = 'Network connection failed';
+
+      if (error.code === 'ENOTFOUND') {
+        errorMessage = 'DNS resolution failed';
+      } else if (error.code === 'ECONNREFUSED') {
+        errorMessage = 'Connection refused';
+      } else if (error.code === 'ECONNRESET') {
+        errorMessage = 'Connection reset';
+      } else if (error.code === 'ETIMEDOUT') {
+        errorMessage = 'Connection timed out';
+      } else if (error.message && error.message.includes('proxy')) {
+        errorMessage = 'Proxy connection failed';
+      }
+
+      reject(new Error(`${errorMessage}: ${error.message || error.code}`));
+    });
+
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error(`Request timed out after ${timeout}ms`));
+    });
+
+    req.end();
+  });
 }
 
 /**
@@ -585,27 +674,30 @@ async function diagnoseNetwork(urls: string[], timeout: number) {
     };
 
     try {
-      const startTime = Date.now();
+      const response = await proxyAwareRequestForDiagnostic(
+        url + '?action=query&meta=siteinfo&format=json&formatversion=2',
+        timeout,
+        'HEAD'
+      );
 
-      // 简单的连通性测试
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeout);
+      result.responseTime = response.responseTime;
+      if (response.statusCode >= 200 && response.statusCode < 400) {
+        result.dnsResolution = 'OK';
+        result.connectivity = 'OK';
+      } else {
+        result.dnsResolution = 'OK'; // DNS解析成功了，但连接有问题
+        result.connectivity = 'Failed';
+      }
 
-      await fetch(url + '?action=query&meta=siteinfo&format=json&formatversion=2', {
-        method: 'HEAD',
-        signal: controller.signal,
-        headers: { 'User-Agent': 'wikipedia-mcp-diagnostic/1.0' }
-      });
-
-      clearTimeout(timeoutId);
-      result.responseTime = Date.now() - startTime;
-      result.dnsResolution = 'OK';
-      result.connectivity = 'OK';
-
-    } catch (error) {
-      result.dnsResolution = 'Failed';
-      result.connectivity = 'Failed';
+    } catch (error: any) {
       result.responseTime = timeout;
+      if (error.message.includes('DNS resolution failed')) {
+        result.dnsResolution = 'Failed';
+        result.connectivity = 'Failed';
+      } else {
+        result.dnsResolution = 'OK';
+        result.connectivity = 'Failed';
+      }
     }
 
     results.push(result);
@@ -631,24 +723,20 @@ async function diagnoseHTTP(urls: string[], timeout: number) {
     };
 
     try {
-      const startTime = Date.now();
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeout);
+      const response = await proxyAwareRequestForDiagnostic(
+        url + '?action=query&meta=siteinfo&format=json&formatversion=2',
+        timeout,
+        'GET'
+      );
 
-      const response = await fetch(url + '?action=query&meta=siteinfo&format=json&formatversion=2', {
-        signal: controller.signal,
-        headers: { 'User-Agent': 'wikipedia-mcp-diagnostic/1.0' }
-      });
-
-      clearTimeout(timeoutId);
-      result.responseTime = Date.now() - startTime;
-      result.httpStatus = response.status;
-      result.contentType = response.headers.get('content-type') || 'Unknown';
+      result.responseTime = response.responseTime;
+      result.httpStatus = response.statusCode;
+      result.contentType = response.headers['content-type'] || 'Unknown';
       result.sslStatus = 'OK';
       result.headers = {
-        'content-type': response.headers.get('content-type'),
-        'server': response.headers.get('server'),
-        'cache-control': response.headers.get('cache-control')
+        'content-type': response.headers['content-type'],
+        'server': response.headers['server'],
+        'cache-control': response.headers['cache-control']
       };
 
     } catch (error) {
@@ -679,29 +767,24 @@ async function diagnoseAPI(urls: string[], timeout: number) {
     };
 
     try {
-      const startTime = Date.now();
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeout);
+      const response = await proxyAwareRequestForDiagnostic(
+        url + '?action=query&meta=siteinfo&format=json&formatversion=2',
+        timeout,
+        'GET'
+      );
 
-      const response = await fetch(url + '?action=query&meta=siteinfo&format=json&formatversion=2', {
-        signal: controller.signal,
-        headers: { 'User-Agent': 'wikipedia-mcp-diagnostic/1.0' }
-      });
+      result.responseTime = response.responseTime;
 
-      clearTimeout(timeoutId);
-      result.responseTime = Date.now() - startTime;
-
-      if (response.ok) {
-        const data = await response.json();
+      if (response.statusCode >= 200 && response.statusCode < 300 && response.data) {
         result.apiResponse = 'OK';
-        result.dataValid = data && data.query && data.query.general;
+        result.dataValid = response.data && response.data.query && response.data.query.general;
         result.apiData = {
-          sitename: data?.query?.general?.sitename || 'Unknown',
-          generator: data?.query?.general?.generator || 'Unknown',
-          phpversion: data?.query?.general?.phpversion || 'Unknown'
+          sitename: response.data?.query?.general?.sitename || 'Unknown',
+          generator: response.data?.query?.general?.generator || 'Unknown',
+          phpversion: response.data?.query?.general?.phpversion || 'Unknown'
         };
       } else {
-        result.apiResponse = `HTTP ${response.status}`;
+        result.apiResponse = `HTTP ${response.statusCode}`;
       }
 
     } catch (error) {
@@ -898,6 +981,28 @@ function formatDiagnosticReport(results: any, totalTime: number, target: string,
     results.recommendations.forEach((rec: string) => {
       report += `${rec}\n\n`;
     });
+  }
+
+  // 诊断总结
+  report += `## 📋 诊断总结\n\n`;
+  report += `本次诊断针对 **${target}** 进行了 **${level}** 级别的网络连接分析。\n\n`;
+
+  if (results.analysis?.overallStatus === 'OK') {
+    report += `🎉 **诊断结果**: 网络连接状态良好，所有检查项目均正常。\n`;
+  } else {
+    report += `⚠️ **诊断结果**: 发现网络连接问题，需要进一步排查和处理。\n`;
+  }
+
+  report += `⏱️ **诊断耗时**: ${totalTime}ms\n`;
+
+  if (results.analysis?.performance?.averageResponseTime) {
+    report += `📊 **平均响应时间**: ${results.analysis.performance.averageResponseTime.toFixed(2)}ms\n`;
+  }
+
+  if (results.analysis?.issues?.length > 0) {
+    report += `🔍 **发现问题**: ${results.analysis.issues.length}个\n`;
+  } else {
+    report += `✅ **状态**: 未发现明显问题\n`;
   }
 
   report += `---\n`;
